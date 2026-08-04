@@ -195,6 +195,11 @@ Request
 
 Read-only, for transparency/debugging — not required to create a
 payment (conversion happens automatically inside `POST /payments`).
+Served from ExchangeRateService's in-memory cache; if the pair isn't
+cached, this triggers the same live-fetch-and-cache path used during
+payment creation (see `currency_conversion_guidelines.md` §3–4). There
+is no persisted rate history to query — this always reflects "the
+freshest rate we currently have or can fetch," not a historical log.
 
 Query: `base`, `quote`
 
