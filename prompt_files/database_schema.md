@@ -31,22 +31,25 @@ Migration files:
 
 ## payments
 
-| Column                 | Type          | Constraints                         | Description                                |
-| ---------------------- | ------------- | ----------------------------------- | ------------------------------------------ |
-| id                     | BIGINT        | AUTO_INCREMENT, PRIMARY KEY         | Payment identifier                         |
-| idempotency_key        | VARCHAR(80)   | NOT NULL, UNIQUE                    | Prevents duplicate payments                |
-| amount                 | DECIMAL(15,2) | NOT NULL                            | Payment amount                             |
-| currency               | CHAR(3)       | NOT NULL                            | Payment currency                           |
-| source_account_id      | BIGINT        | NOT NULL, FK → accounts(id)         | Sender account                             |
-| destination_account_id | BIGINT        | NOT NULL, FK → accounts(id)         | Receiver account                           |
-| reference              | VARCHAR(200)  | NULL                                | Payment reference                          |
-| status                 | VARCHAR(20)   | NOT NULL                            | Current payment status                     |
-| error_code             | VARCHAR(40)   | NULL                                | Failure error code                         |
-| error_description      | VARCHAR(300)  | NULL                                | Failure description                        |
-| destination_amount     | DECIMAL(15,2) | NULL                                | Set only when currencies differ            |
-| exchange_rate          | DECIMAL(18,8) | NULL                                | Exchange rate used for currency conversion |
-| created_at             | TIMESTAMP     | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation time                              |
-| updated_at             | TIMESTAMP     | NOT NULL, AUTO UPDATE               | Last update time                           |
+| Column                   | Type          | Constraints                         | Description                                            |
+| ------------------------ | ------------- | ----------------------------------- | ------------------------------------------------------ |
+| id                       | BIGINT        | AUTO_INCREMENT, PRIMARY KEY         | Payment identifier                                     |
+| idempotency_key          | VARCHAR(80)   | NOT NULL, UNIQUE                    | Prevents duplicate payments                            |
+| amount                   | DECIMAL(15,2) | NOT NULL                            | Payment amount                                         |
+| currency                 | CHAR(3)       | NOT NULL                            | Payment currency                                       |
+| source_account_id        | BIGINT        | NOT NULL, FK → accounts(id)         | Sender account                                         |
+| destination_account_id   | BIGINT        | NOT NULL, FK → accounts(id)         | Receiver account                                       |
+| reference                | VARCHAR(200)  | NULL                                | Payment reference                                      |
+| status                   | VARCHAR(20)   | NOT NULL                            | Current payment status                                 |
+| error_code               | VARCHAR(40)   | NULL                                | Failure error code                                     |
+| error_description        | VARCHAR(300)  | NULL                                | Failure description                                    |
+| destination_amount       | DECIMAL(15,2) | NULL                                | Set only when currencies differ                        |
+| exchange_rate            | DECIMAL(18,8) | NULL                                | Exchange rate used for currency conversion             |
+| exchange_rate_source     | VARCHAR(60)   | NULL                                | Source of the exchange rate (e.g. `exchangerate.host`) |
+| exchange_rate_fetched_at | TIMESTAMP     | NULL                                | Time the exchange rate was fetched from the provider   |
+| created_at               | TIMESTAMP     | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation time                                          |
+| updated_at               | TIMESTAMP     | NOT NULL, AUTO UPDATE               | Last update time                                       |
+
 
 ### Payment Status Values
 
@@ -100,7 +103,6 @@ idx_accounts_number
 ## Payments Constraints
 
 ```sql
-CHECK (amount > 0);
 
 CHECK (
     status IN (

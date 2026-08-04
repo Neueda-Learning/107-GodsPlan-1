@@ -22,8 +22,7 @@ React SPA (Front end) ──────────────► API Gateway 
                                (source of truth —
                                 payments,
                                 payment_status_history,
-                                accounts,
-                                exchange_rates)
+                                accounts)
 ```
 
 ## Notes
@@ -40,7 +39,7 @@ React SPA (Front end) ──────────────► API Gateway 
 | ----------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | **PaymentService**      | Create, retrieve, list payments (DTOs only)                          | Decide validity or transitions itself                               |
 | **ValidationService**   | Amount/currency/account rules (Appendix C)                           | Persist anything directly                                           |
-| **ExchangeRateService** | FX rate lookup and caching; the only caller of the external rate API | Convert an amount itself, or be called directly by LifecycleService |
+| **ExchangeRateService** | FX rate lookup and caching; the only caller of the external rate API |Perform payment lifecycle transitions, persist payment data directly, or be called directly by controllers/clients|
 | **LifecycleService**    | The state machine; the only writer of `status`                       | Be bypassed by any other component                                  |
 | **IdempotencyService**  | Detect duplicate idempotency keys before create                      | Allow two payments to share one key                                 |
 | **AuditService**        | Append-only status history, read-back for a payment                  | Ever update or delete a history row                                 |
