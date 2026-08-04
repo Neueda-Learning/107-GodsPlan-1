@@ -269,7 +269,7 @@ lifecycle stage.
   if avoidable (acceptable to allow at most one duplicate call under
   race conditions — not worth over-engineering for a training system).
 
-## 10. What NOT to build for this training project
+## 10. What NOT to build for this project
 
 - Do not implement live rate streaming/websockets — polling with a
   short cache TTL is sufficient and far simpler to demo.
