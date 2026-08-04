@@ -103,29 +103,27 @@ Client        API        LifecycleSvc        DB
 # SD-05 Cross-Currency Payment (Cache Miss → Live Rate Fetch)
 
 ```text
-Client   API    PaymentSvc  ValidationSvc  ExchangeRateSvc   exchangerate.host   DB
- │        │          │            │              │                 │            │
- ├─POST /payments (USD→INR) ─────►│              │                 │            │
- │        ├─insert payment, status=CREATED────────────────────────────────────►│
- │        ├─validate()───────────►│              │                 │            │
- │        │          │            ├─needs rate USD/INR────────────►│            │
- │        │          │            │              ├─check cache (miss)──────────►│
+Client   API    PaymentSvc  ValidationSvc  ExchangeRateSvc   exchangerate.host
+ │        │          │            │              │                 │
+ ├─POST /payments (USD→INR) ─────►│              │                 │
+ │        ├─insert payment, status=CREATED────────────────────────►│
+ │        ├─validate()───────────►│              │                 │
+ │        │          │            ├─needs rate USD/INR────────────►│
+ │        │          │            │              ├─check cache (miss)
  │        │          │            │              ├─GET /convert?access_key=..&from=USD&to=INR&amount=250►│
- │        │          │            │              │◄─200 {info:{quote:95.330968,timestamp:1785786428},result:23832.74}─┤
- │        │          │            │              ├─store info.quote in exchange_rates────────────────►│
- │        │          │            │◄─rate=95.330968, source=exchangerate.host──┤                        │
- │        │          │◄─converted: destinationAmount=23832.74──┤                                        │
- │        ├─transition(CREATED→VALIDATED, freeze rate)──────────────────────────────────────────────►│
- │        ├─transition(VALIDATED→SENT)─────────────────────────────────────────────────────────────►│
- │        ├─transition(SENT→COMPLETED)─────────────────────────────────────────────────────────────►│
- │◄─201 {id, status:COMPLETED, destinationAmount:23832.74, exchangeRate:95.330968}─┤
+ │        │          │            │              │◄─200 {info:{quote:95.330968,timestamp:1785786428},result:23832.74}
+ │        │          │            │◄─rate=95.330968───────────────┤
+ │        │          │◄─converted: destinationAmount=23832.74─────┤
+ │        ├─transition(CREATED→VALIDATED, freeze rate)────────────────────────►│
+ │        ├─transition(VALIDATED→SENT)────────────────────────────────────────►│
+ │        ├─transition(SENT→COMPLETED)────────────────────────────────────────►│
+ │◄─201 {id, status:COMPLETED, destinationAmount:23832.74, exchangeRate:95.330968}
 ```
 
 ## Notes
 
-* The rate is fetched once, during the **CREATED→VALIDATED** step, and never re-fetched later in the same payment's lifecycle—it is frozen onto the payment record (`exchange_rate`, `exchange_rate_id`).
+* The rate is fetched once during the **CREATED→VALIDATED** step and stored in the payment's `exchange_rate` field. It is never re-fetched later in the payment's lifecycle.
 * ExchangeRateSvc caches `info.quote` (the unit rate), not `result`. `result` is only valid for the specific request amount (`250`). A later USD→INR payment for a different amount can reuse the cached rate and compute its own `destinationAmount`.
-* `info.timestamp` (Unix seconds) is converted to a `TIMESTAMP` before being stored as `exchange_rates.fetched_at`.
 
 ---
 
@@ -151,4 +149,4 @@ Client   API    ValidationSvc  ExchangeRateSvc   exchangerate.host   DB
 ## Notes
 
 * Exactly one retry, then fail—never hang the request waiting on an external provider (architecture.md, ExchangeRateService rules).
-* No `exchange_rates` row and no `destination_amount` are ever persisted for a failed lookup. The FAILED payment simply carries the error code, following the same pattern as every other validation failure.
+* No `destination_amount` is persisted for a failed lookup. The FAILED payment simply carries the error code, following the same pattern as every other validation failure.
