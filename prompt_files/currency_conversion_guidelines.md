@@ -82,8 +82,8 @@ Field mapping into the domain model:
 | API field | Meaning | Where it goes |
 |-----------|---------|----------------|
 | `success` | Whether the call succeeded | If `false`, treat as EXCHANGE_RATE_UNAVAILABLE regardless of HTTP status |
-| `info.quote` | The **unit rate** (1 `from` = `quote` `to`) | `exchange_rates.rate`, `payments.exchange_rate` |
-| `info.timestamp` | Unix seconds when the rate was struck | `exchange_rates.fetched_at` (convert to `TIMESTAMP`) |
+| `info.quote` | The **unit rate** (1 `from` = `quote` `to`) | In-memory cache entry; `payments.exchange_rate` once frozen |
+| `info.timestamp` | Unix seconds when the rate was struck | In-memory cache entry; `payments.exchange_rate_fetched_at` (convert to `TIMESTAMP`) once frozen |
 | `result` | `amount * quote`, pre-computed by the provider | Used to derive `payments.destination_amount`, but **not stored directly** — see note below |
 | `query.from` / `query.to` | Echo of the request | Sanity-check against what was requested; mismatch → treat as EXCHANGE_RATE_UNAVAILABLE |
 
@@ -123,9 +123,17 @@ Real-time doesn't mean "one external call per payment." This provider
 rate-limits aggressively on free/entry tiers, and rates don't move
 fast enough to justify per-payment calls.
 
-- Cache by currency pair (e.g. `USD_INR`) with a short TTL — 1–5
-  minutes is reasonable for a training system.
-- Cache the **unit rate** (`info.quote`), plus `fetched_at`
+This project uses an **in-memory cache only** — no database table for
+rates. That's a deliberate simplification: this is a single-instance
+training deployment, so a persisted rate-history table would add a
+table, a migration, and a join for benefits (rate lookups independent
+of any payment, cache warmth across restarts, sharing across multiple
+instances) this project doesn't need. Once a rate is used, it's frozen
+onto the payment itself (§5) — that's the permanent record.
+
+- Cache by currency pair (e.g. `USD_INR`) in memory, with a short TTL
+  — 1–5 minutes is reasonable for a training system.
+- Cache the **unit rate** (`info.quote`), plus `fetchedAt`
   (`info.timestamp`) and `source` (`"exchangerate.host"`) — never
   cache `result`, since that's specific to one payment's amount (see
   §3 mapping table).
@@ -136,43 +144,38 @@ fast enough to justify per-payment calls.
   cached rate is older than a hard max-age, e.g. 30 minutes), fail
   the payment with EXCHANGE_RATE_UNAVAILABLE / STALE_EXCHANGE_RATE
   rather than silently using a very old rate.
+- Because the cache is in-memory, it resets on every app restart and
+  is not shared if the app is ever scaled to multiple instances. Both
+  are acceptable trade-offs for this project's single-VM training
+  deployment (architecture.md, ADR #8) — call this out explicitly in
+  the presentation if asked "what would you do differently for
+  production."
 
-A simple in-memory cache (e.g. Caffeine, or a Spring `@Cacheable`) is
-sufficient for this project's scale — no need for Redis unless the
-team wants the practice.
+Use a Caffeine cache (or Spring's `@Cacheable`) — no need for Redis or
+any external cache store for this project's scale.
 
 ## 5. Schema additions
 
-New table, `exchange_rates` (cache/audit combined):
+No new table. Extend `payments` directly with the fields that make the
+frozen rate part of the payment's own permanent record:
 
 ```
-exchange_rates
-  id               BIGINT AUTO_INCREMENT PK
-  base_currency    CHAR(3)   NOT NULL       -- API's "from"
-  quote_currency   CHAR(3)   NOT NULL       -- API's "to"
-  rate             DECIMAL(18,8) NOT NULL   -- API's info.quote (unit rate)
-  source           VARCHAR(60)   NOT NULL   -- "exchangerate.host"
-  fetched_at       TIMESTAMP     NOT NULL   -- API's info.timestamp, converted
-  created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
-
-  UNIQUE (base_currency, quote_currency, fetched_at)
-  INDEX idx_rates_pair_time (base_currency, quote_currency, fetched_at DESC)
-```
-
-Extend `payments` with the fields that make the frozen rate part of
-the permanent record, not something recomputed later:
-
-```
-ALTER TABLE payments ADD COLUMN destination_amount DECIMAL(15,2);
-ALTER TABLE payments ADD COLUMN exchange_rate       DECIMAL(18,8);
-ALTER TABLE payments ADD COLUMN exchange_rate_id    BIGINT REFERENCES exchange_rates(id);
+ALTER TABLE payments ADD COLUMN destination_amount       DECIMAL(15,2);
+ALTER TABLE payments ADD COLUMN exchange_rate            DECIMAL(18,8);
+ALTER TABLE payments ADD COLUMN exchange_rate_source     VARCHAR(60);
+ALTER TABLE payments ADD COLUMN exchange_rate_fetched_at TIMESTAMP;
 ```
 
 This means every completed cross-currency payment can always answer
 "what rate was actually used, and where did it come from" — critical
 for any future audit/reporting work, and consistent with how
 `payment_status_history` already treats every state change as
-permanent and explainable.
+permanent and explainable. What you give up versus a dedicated table:
+you can no longer query "what was the USD/INR rate at 9am today"
+independent of a specific payment, and the cache itself doesn't
+survive a restart. If either of those becomes a real requirement
+later, promoting the in-memory cache to a real `exchange_rates` table
+is a small, additive change — nothing else in this design has to move.
 
 ## 6. API surface changes
 
@@ -250,7 +253,8 @@ lifecycle stage.
 ## 9. Testing checklist
 
 - Same-currency payment (source == destination == payment currency) —
-  conversion is skipped entirely; no exchange_rates row is created.
+  conversion is skipped entirely; `exchange_rate` and related columns
+  stay null on the payment.
 - Cross-currency payment with a fresh cached rate — no external API
   call made; response includes the cached rate and its original
   `fetched_at`.
