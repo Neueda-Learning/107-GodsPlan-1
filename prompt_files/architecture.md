@@ -8,7 +8,7 @@
 React SPA (Front end) ──────────────► API Gateway / Nginx (TLS)
                                              │
                                              ▼
-                                 Spring Boot 3 (Java)
+                                 Spring Boot (Java)
                                  ├─ PaymentService      (create, retrieve, list)
                                  ├─ ValidationService   (amount, currency, accounts)
                                  ├─ ExchangeRateService (FX lookup, caching)
