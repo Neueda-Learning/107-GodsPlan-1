@@ -5,6 +5,7 @@ import AppLayout from './layouts/AppLayout'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Payments = lazy(() => import('./pages/Payments'))
 const PaymentDetails = lazy(() => import('./pages/PaymentDetails'))
+const CustomerDetails = lazy(() => import('./pages/CustomerDetails'))
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="payments" element={<Payments />} />
         <Route path="payments/:id" element={<PaymentDetails />} />
+        <Route path="customers" element={<CustomerDetails />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes></Suspense>

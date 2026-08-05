@@ -4,6 +4,7 @@ const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1',
   timeout: 10000,
   headers: { Accept: 'application/json' },
+  withCredentials: true,
 })
 
 export function apiMessage(error) {
@@ -21,3 +22,24 @@ export const paymentApi = {
   }).then(({ data }) => data),
 }
 
+async function csrfHeaders() {
+  const { data } = await client.get('/auth/csrf')
+  return { [data.headerName]: data.token }
+}
+
+export const authApi = {
+  me: () => client.get('/auth/me').then(({ data }) => data),
+  login: async (email, password) => {
+    const headers = await csrfHeaders()
+    const body = new URLSearchParams({ username: email, password })
+    return client.post('/auth/login', body, {
+      headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+    }).then(({ data }) => data)
+  },
+  logout: async () => client.post('/auth/logout', null, { headers: await csrfHeaders() }),
+}
+
+export const customerApi = {
+  list: (params = {}) => client.get('/customers', { params }).then(({ data }) => data),
+  transactions: (customerId, params = {}) => client.get(`/customers/${customerId}/transactions`, { params }).then(({ data }) => data),
+}

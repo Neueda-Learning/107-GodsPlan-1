@@ -23,6 +23,9 @@ services:
       DB_USERNAME: ${MYSQL_USER:-payments}
       DB_PASSWORD: ${MYSQL_PASSWORD:-payments}
       EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-Operations Staff}
     ports:
       - "8080:8080"
     depends_on:

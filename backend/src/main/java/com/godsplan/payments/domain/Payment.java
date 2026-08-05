@@ -46,6 +46,8 @@ public class Payment {
     private String exchangeRateSource;
     @Column(name = "exchange_rate_fetched_at")
     private Instant exchangeRateFetchedAt;
+    @Column(name = "payment_method", nullable = false, length = 80)
+    private String paymentMethod = "Bank transfer";
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

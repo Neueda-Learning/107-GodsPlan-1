@@ -21,4 +21,8 @@ payments:
     fresh-ttl: 5m
     max-age: 30m
     timeout: 2s
-
+auth:
+  admin:
+    username: staff@godsplan.local
+    password: test-password
+    full-name: Test Staff

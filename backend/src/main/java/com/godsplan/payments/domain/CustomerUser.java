@@ -6,21 +6,21 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "accounts")
+@Table(name = "customer_users")
 @Getter
 @NoArgsConstructor
-public class Account {
+public class CustomerUser {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "account_number", nullable = false, unique = true, length = 34)
-    private String accountNumber;
-    @Column(nullable = false, length = 3, columnDefinition = "char(3)")
-    private String currency;
+    @Column(name = "full_name", nullable = false, length = 120)
+    private String fullName;
+    @Column(nullable = false, unique = true, length = 190)
+    private String email;
+    @Column(nullable = false, length = 20)
+    private String role;
     @Column(nullable = false)
     private boolean active;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "customer_id", nullable = false)
-    private CustomerUser customer;
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 }
+

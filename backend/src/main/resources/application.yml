@@ -20,6 +20,12 @@ spring:
 server:
   port: ${PORT:8080}
   forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+      timeout: 30m
 management:
   endpoints:
     web:
@@ -41,3 +47,8 @@ payments:
     fresh-ttl: 5m
     max-age: 30m
     timeout: 2s
+auth:
+  admin:
+    username: ${ADMIN_USERNAME:}
+    password: ${ADMIN_PASSWORD:}
+    full-name: ${ADMIN_FULL_NAME:Operations Staff}

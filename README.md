@@ -12,6 +12,7 @@ A complete training-grade payments application built from the repository require
 - Cached exchangerate.host integration with timeout, one retry, frozen rates, and `HALF_EVEN` rounding
 - React, Vite, Tailwind, React Router, Axios, Recharts, and Lucide dashboard
 - Dashboard metrics, status chart, searchable/filterable payments, details, conversion data, and history timeline
+- Protected Customer Details workspace with staff sessions, paginated customer records, masked cards, and lazy-loaded payment history
 - Responsive desktop/tablet/mobile layouts, skeletons, toasts, empty states, accessible controls, and inline validation
 - Docker-based local environment and automated backend/frontend tests
 
@@ -27,11 +28,18 @@ docker compose up --build
 Then open:
 
 - Dashboard: http://localhost:3000
+- Customer Details: http://localhost:3000/customers
 - API: http://localhost:8080/api/v1/payments
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health check: http://localhost:8080/actuator/health
 
 MySQL is available on `localhost:3306`. The default development credentials in `.env.example` are intentionally local-only.
+
+### Staff access
+
+The Customer Details page is restricted to the configured administrator or staff account. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME` in `.env`, then sign in when the page prompts you. Authentication uses an HTTP-only server session and the current user is resolved from that session.
+
+Only card brand and the server-generated form `XXXX XXXX XXXX 1234` are returned to the browser. Full card numbers, CVVs, passwords, and payment tokens are neither exposed by this API nor stored by the customer-card migration.
 
 ### Seed accounts
 
@@ -89,7 +97,7 @@ npm install
 npm run dev
 ```
 
-Backend only requires Java 21, Maven 3.9+, and a running MySQL database. Configuration is externalized through `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PAYMENT_MAX_AMOUNT`, and `EXCHANGE_RATE_API_KEY`.
+Backend only requires Java 21, Maven 3.9+, and a running MySQL database. Configuration is externalized through `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PAYMENT_MAX_AMOUNT`, `EXCHANGE_RATE_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME`.
 
 Run verification:
 
@@ -111,7 +119,7 @@ docker run --rm -v "$PWD/backend:/app" -w /app maven:3.9.9-eclipse-temurin-21 mv
 
 ## Architecture and integrity guarantees
 
-The backend is a modular monolith. Controllers only handle HTTP concerns; payment creation, validation, FX lookup, lifecycle transitions, idempotency, and audit reading are separate services.
+The backend is a modular monolith. Controllers only handle HTTP concerns; payment creation, validation, FX lookup, lifecycle transitions, idempotency, audit reading, and privacy-filtered customer queries are separate services.
 
 Every status transition locks the payment, checks a single transition table, updates current state, and appends the history row in one transaction. A unique database constraint is the final authority for idempotency under concurrent submissions. API responses are DTOs—JPA entities are never exposed.
 
@@ -126,5 +134,4 @@ prompt_files/, requirements/, analysis/  source specifications
 compose.yaml  MySQL + API + web orchestration
 ```
 
-No authentication or real payment gateway is included, as both are explicitly outside v1 scope. Only the exchange-rate lookup is external; settlement remains simulated.
-
+Payment operations retain the original v1 access model. The privacy-sensitive Customer Details workspace adds isolated staff authentication and role checks. No real payment gateway is included; only the exchange-rate lookup is external and settlement remains simulated.
