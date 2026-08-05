@@ -4,6 +4,13 @@ import { paymentApi, apiMessage } from '../api/client'
 import { useToast } from '../hooks/useToast'
 
 const empty = { sourceAccountId: '', destinationAccountId: '', amount: '', currency: 'USD', reference: '' }
+const supportedCurrencies = [
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'GBP', name: 'British Pound' },
+  { code: 'INR', name: 'Indian Rupee' },
+  { code: 'JPY', name: 'Japanese Yen' },
+]
 
 export default function CreatePaymentModal({ onClose, onCreated }) {
   const [form, setForm] = useState(empty)
@@ -69,7 +76,15 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
         <form className="mt-6 space-y-5" onSubmit={submit} noValidate>
           {errors.form && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{errors.form}</p>}
           <div className="grid gap-4 sm:grid-cols-2">{field('sourceAccountId', 'Source account ID', 'number', 'e.g. 1')}{field('destinationAccountId', 'Destination account ID', 'number', 'e.g. 2')}</div>
-          <div className="grid gap-4 sm:grid-cols-[1fr_130px]">{field('amount', 'Amount', 'text', '0.00')}{field('currency', 'Currency', 'text', 'USD')}</div>
+          <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+            {field('amount', 'Amount', 'text', '0.00')}
+            <label className="block"><span className="label">Currency</span>
+              <select className={`input ${errors.currency ? 'border-danger' : ''}`} value={form.currency} onChange={change('currency')} aria-invalid={Boolean(errors.currency)}>
+                {supportedCurrencies.map((currency) => <option key={currency.code} value={currency.code}>{currency.code} — {currency.name}</option>)}
+              </select>
+              {errors.currency && <span className="mt-1.5 block text-xs text-red-600">{errors.currency}</span>}
+            </label>
+          </div>
           {field('reference', 'Reference (optional)', 'text', 'e.g. Invoice 4471')}
           <p className="text-xs text-ink-muted">For the included demo data, account IDs 1 and 2 are USD; 3 is EUR; 4 is INR.</p>
           <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end"><button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>Cancel</button><button type="submit" className="btn-primary" disabled={submitting}>{submitting && <Loader2 className="size-4 animate-spin" />} {submitting ? 'Processing…' : 'Create payment'}</button></div>
