@@ -28,14 +28,16 @@ docker compose up -d --build
 
 Then open:
 
-- Dashboard: http://localhost:3000
-- Customer Details: http://localhost:3000/customers
-- Analytics: http://localhost:3000/analytics
-- API: http://localhost:8080/api/v1/payments
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- Health check: http://localhost:8080/actuator/health
+- Dashboard: http://localhost:8081
+- Customer Details: http://localhost:8081/customers
+- Analytics: http://localhost:8081/analytics
+- API: http://localhost:8081/api/v1/payments
+- Swagger UI: http://localhost:8081/swagger-ui.html
+- Health check: http://localhost:8081/actuator/health
 
 MySQL is available on `localhost:3306`. The default development credentials in `.env.example` are intentionally local-only.
+
+The application uses an nginx reverse proxy to serve both frontend and backend through a single port. The nginx port can be configured via the `NGINX_PORT` environment variable in `.env` (defaults to 8081). This is useful when deploying to environments with specific port requirements like EC2 instances.
 
 ### Staff login
 
@@ -72,6 +74,31 @@ To stop the local stack without deleting its database volume:
 ```bash
 docker compose down
 ```
+
+## EC2 Deployment
+
+The application is designed to run on a single EC2 instance with all services accessible through one nginx reverse proxy port:
+
+1. **Configure the port** in your `.env` file:
+   ```bash
+   cp .env.example .env
+   # Set NGINX_PORT to your available port (8081 or 8082)
+   echo "NGINX_PORT=8081" >> .env
+   ```
+
+2. **Ensure your EC2 security group** allows inbound traffic on the configured port
+
+3. **Build and run**:
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. **Access the application** from your Windows DCV session:
+   - All endpoints: `http://<ec2-private-ip>:8081`
+   - Frontend, API, and Swagger UI all accessible through the same port
+   - Nginx automatically routes `/api/*` to backend and everything else to frontend
+
+The nginx reverse proxy configuration is in `nginx.conf` at the root of the project.
 
 ### Seed accounts
 
@@ -150,6 +177,30 @@ docker run --rm -v "$PWD/backend:/app" -w /app maven:3.9.9-eclipse-temurin-21 mv
 ```
 
 ## Architecture and integrity guarantees
+
+### Service Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  nginx Reverse Proxy (Port 8081)                   │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  Routes:                                     │  │
+│  │  • /api/* → Backend API (port 8080)          │  │
+│  │  • /swagger-ui/* → Backend Swagger           │  │
+│  │  • /actuator/* → Backend Health/Metrics      │  │
+│  │  • /* → Frontend (port 80)                   │  │
+│  └──────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+         ↓                              ↓
+    ┌────────┐                    ┌──────────┐
+    │  Web   │                    │   API    │
+    │ (React)│                    │ (Spring) │
+    └────────┘                    └──────────┘
+                                       ↓
+                                  ┌────────┐
+                                  │ MySQL  │
+                                  └────────┘
+```
 
 The backend is a modular monolith. Controllers only handle HTTP concerns; payment creation, validation, FX lookup, lifecycle transitions, idempotency, audit reading, and privacy-filtered customer queries are separate services.
 
