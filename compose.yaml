@@ -15,6 +15,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      - app-network
 
   api:
     build: ./backend
@@ -30,8 +32,6 @@ services:
       ANALYTICS_TIME_ZONE: ${ANALYTICS_TIME_ZONE:-Asia/Kolkata}
       ANALYTICS_BASE_CURRENCY: ${ANALYTICS_BASE_CURRENCY:-USD}
       ANALYTICS_MAX_QUERY_ROWS: ${ANALYTICS_MAX_QUERY_ROWS:-250000}
-    ports:
-      - "8080:8080"
     depends_on:
       mysql:
         condition: service_healthy
@@ -40,14 +40,14 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    networks:
+      - app-network
 
   web:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
-    ports:
-      - "3000:80"
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
     depends_on:
       api:
         condition: service_healthy
@@ -56,19 +56,25 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - app-network
 
   nginx:
-    image: nginx:alpine
-    container_name: kk-nginx
+    image: nginx:1.27-alpine
+    ports:
+      - "${NGINX_PORT:-8081}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api
       - web
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./index.html:/usr/share/nginx/html/index.html:ro
     restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   payments_mysql:
