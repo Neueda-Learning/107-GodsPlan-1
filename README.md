@@ -23,7 +23,7 @@ Requirements: Docker Desktop with Compose.
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up -d --build
 ```
 
 Then open:
@@ -37,9 +37,19 @@ Then open:
 
 MySQL is available on `localhost:3306`. The default development credentials in `.env.example` are intentionally local-only.
 
-### Staff access
+### Staff login
 
-The Customer Details page is restricted to the configured administrator or staff account. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME` in `.env`, then sign in when the page prompts you. Authentication uses an HTTP-only server session and the current user is resolved from that session.
+Use the following local demonstration account to access **Customers** and **Analytics**:
+
+| Field | Value |
+|---|---|
+| Email | `staff@godsplan.local` |
+| Password | `staff-demo-2026` |
+| Role | `ADMIN` |
+
+These credentials are configured through `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME` in `.env`. They are intended only for local development and should be replaced in any shared or deployed environment.
+
+Authentication uses an HTTP-only server session with CSRF protection. The backend resolves the current user from the authenticated session and independently enforces `ADMIN` or `STAFF` authorization for customer and analytics endpoints.
 
 Only card brand and the server-generated form `XXXX XXXX XXXX 1234` are returned to the browser. Full card numbers, CVVs, passwords, and payment tokens are neither exposed by this API nor stored by the customer-card migration.
 
@@ -56,6 +66,12 @@ The command inserts deterministic demonstration records directly into the existi
 `APP_ENVIRONMENT` must be one of `development`, `dev`, `local`, `test`, `staging`, or `demo`. The command fails before writing anything when the environment is `production` or unspecified. Seeding is never performed during normal application startup.
 
 Analytics APIs are available under `/api/v1/analytics` and require an authenticated `ADMIN` or `STAFF` session. Aggregations and all filters execute on the backend; recent transactions are database-paginated and card values are masked before serialization.
+
+To stop the local stack without deleting its database volume:
+
+```bash
+docker compose down
+```
 
 ### Seed accounts
 
