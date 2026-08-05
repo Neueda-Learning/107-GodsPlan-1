@@ -1,10 +1,11 @@
-import { CreditCard, LayoutDashboard, Users, X } from 'lucide-react'
+import { BarChart3, CreditCard, LayoutDashboard, Users, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/payments', label: 'Payments', icon: CreditCard },
-  { to: '/customers', label: 'Customer Details', icon: Users },
+  { to: '/customers', label: 'Customers', icon: Users },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
 export default function Sidebar({ open, onClose }) {

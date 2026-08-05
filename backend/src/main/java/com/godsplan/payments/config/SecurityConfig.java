@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**",
                                 "/swagger-ui.html", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/customers/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers("/api/v1/analytics/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").authenticated()
                         .anyRequest().permitAll())
                 .formLogin(form -> form
@@ -79,4 +80,3 @@ public class SecurityConfig {
         response.getWriter().write(body);
     }
 }
-

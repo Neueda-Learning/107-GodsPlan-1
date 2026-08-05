@@ -43,3 +43,9 @@ export const customerApi = {
   list: (params = {}) => client.get('/customers', { params }).then(({ data }) => data),
   transactions: (customerId, params = {}) => client.get(`/customers/${customerId}/transactions`, { params }).then(({ data }) => data),
 }
+
+export const analyticsApi = {
+  overview: (params = {}) => client.get('/analytics/overview', { params }).then(({ data }) => data),
+  recent: (params = {}) => client.get('/analytics/recent-transactions', { params }).then(({ data }) => data),
+  exchangeRates: (params = {}) => client.get('/analytics/exchange-rates', { params }).then(({ data }) => data),
+}

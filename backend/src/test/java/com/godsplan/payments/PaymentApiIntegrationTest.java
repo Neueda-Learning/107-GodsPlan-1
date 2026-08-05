@@ -1,6 +1,8 @@
 package com.godsplan.payments;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,6 +19,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.test.context.support.WithMockUser;
+import com.godsplan.payments.config.AnalyticsProperties;
+import com.godsplan.payments.service.AnalyticsSeedService;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -24,9 +32,12 @@ import org.springframework.security.test.context.support.WithMockUser;
 class PaymentApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
+    @Autowired AnalyticsSeedService analyticsSeeds;
 
     @BeforeEach
     void seedAccounts() {
+        jdbc.update("DELETE FROM refunds");
+        jdbc.update("DELETE FROM exchange_rate_history");
         jdbc.update("DELETE FROM payment_cards");
         jdbc.update("DELETE FROM payment_status_history");
         jdbc.update("DELETE FROM payments");
@@ -113,6 +124,79 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
+    void analyticsRequiresStaffAuthentication() throws Exception {
+        mvc.perform(get("/api/v1/analytics/overview"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
+    void analyticsCalculationsFiltersAndPrivacyMatchDatabaseRecords() throws Exception {
+        Instant created = Instant.now().minusSeconds(3600);
+        long completed = analyticsPayment("ANALYTICS-COMPLETED", "100.00", "USD", "COMPLETED", null, null, created);
+        analyticsPayment("ANALYTICS-FAILED", "200.00", "USD", "FAILED", "ISSUER_DECLINED", "Issuer declined", created);
+        analyticsPayment("ANALYTICS-PENDING", "300.00", "USD", "SENT", null, null, created);
+        jdbc.update("INSERT INTO refunds (idempotency_key, payment_id, amount, currency, status, reason, created_at) "
+                        + "VALUES ('ANALYTICS-REFUND', ?, 50.00, 'USD', 'COMPLETED', 'Requested refund', ?)",
+                completed, Timestamp.from(created.plusSeconds(60)));
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+
+        mvc.perform(get("/api/v1/analytics/overview")
+                        .param("from", today.toString()).param("to", today.toString()).param("baseCurrency", "USD"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].value").value(3.00))
+                .andExpect(jsonPath("$.kpis[1].value").value(0.00))
+                .andExpect(jsonPath("$.kpis[2].value").value(1.00))
+                .andExpect(jsonPath("$.kpis[3].value").value(1.00))
+                .andExpect(jsonPath("$.kpis[4].value").value(1.00))
+                .andExpect(jsonPath("$.kpis[5].value").value(600.00))
+                .andExpect(jsonPath("$.kpis[7].value").value(50.00))
+                .andExpect(jsonPath("$.kpis[9].value").value(50.00))
+                .andExpect(jsonPath("$.paymentStatus", hasSize(4)))
+                .andExpect(jsonPath("$.failureReasons[0].code").value("ISSUER_DECLINED"));
+
+        mvc.perform(get("/api/v1/analytics/overview").param("from", today.toString())
+                        .param("to", today.toString()).param("status", "FAILED").param("currency", "USD"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].value").value(1.00))
+                .andExpect(jsonPath("$.kpis[2].value").value(1.00));
+
+        mvc.perform(get("/api/v1/analytics/recent-transactions").param("from", today.toString())
+                        .param("to", today.toString()).param("page", "0").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
+                .andExpect(jsonPath("$.content[0].lastFour").doesNotExist())
+                .andExpect(jsonPath("$.content[0].cvv").doesNotExist())
+                .andExpect(jsonPath("$.content[0].paymentToken").doesNotExist());
+    }
+
+    @Test
+    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
+    void analyticsReturnsRealEmptyResultsForAnEmptyPeriod() throws Exception {
+        mvc.perform(get("/api/v1/analytics/overview").param("from", "2020-01-01").param("to", "2020-01-07"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].value").value(0.00))
+                .andExpect(jsonPath("$.transactionsOverTime", hasSize(7)));
+    }
+
+    @Test
+    void analyticsSeedIsIdempotentAndRefusesProduction() {
+        analyticsSeeds.seed();
+        long first = jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE idempotency_key LIKE 'analytics-demo-payment-%'", Long.class);
+        analyticsSeeds.seed();
+        long second = jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE idempotency_key LIKE 'analytics-demo-payment-%'", Long.class);
+        assertEquals(120, first);
+        assertEquals(first, second);
+
+        var production = new AnalyticsSeedService(jdbc, new AnalyticsProperties(
+                "production", "UTC", 30, 1826, 100, 250000, "USD"));
+        assertThrows(IllegalStateException.class, production::seed);
+    }
+
+    @Test
     @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
     void returnsOtherCustomersWithBackendMaskedCardsAndPaymentHistory() throws Exception {
         mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-CUSTOMER-HISTORY")
@@ -135,5 +219,15 @@ class PaymentApiIntegrationTest {
     private String request(String amount) {
         return "{\"amount\":" + amount + ",\"currency\":\"USD\",\"sourceAccountId\":1,"
                 + "\"destinationAccountId\":2,\"reference\":\"Test payment\"}";
+    }
+
+    private long analyticsPayment(String key, String amount, String currency, String status,
+                                  String errorCode, String errorDescription, Instant created) {
+        jdbc.update("INSERT INTO payments (idempotency_key, amount, currency, source_account_id, destination_account_id, "
+                        + "reference, status, error_code, error_description, payment_method, created_at, updated_at, version) "
+                        + "VALUES (?, ?, ?, 2, 1, 'Analytics test', ?, ?, ?, 'Credit card', ?, ?, 0)",
+                key, new java.math.BigDecimal(amount), currency, status, errorCode, errorDescription,
+                Timestamp.from(created), Timestamp.from(created));
+        return jdbc.queryForObject("SELECT id FROM payments WHERE idempotency_key = ?", Long.class, key);
     }
 }

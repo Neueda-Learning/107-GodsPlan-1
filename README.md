@@ -13,6 +13,7 @@ A complete training-grade payments application built from the repository require
 - React, Vite, Tailwind, React Router, Axios, Recharts, and Lucide dashboard
 - Dashboard metrics, status chart, searchable/filterable payments, details, conversion data, and history timeline
 - Protected Customer Details workspace with staff sessions, paginated customer records, masked cards, and lazy-loaded payment history
+- Protected, database-driven Analytics workspace with backend aggregation, filters, KPI trends, interactive charts, stored FX history, refunds, heatmaps, and paginated transactions
 - Responsive desktop/tablet/mobile layouts, skeletons, toasts, empty states, accessible controls, and inline validation
 - Docker-based local environment and automated backend/frontend tests
 
@@ -29,6 +30,7 @@ Then open:
 
 - Dashboard: http://localhost:3000
 - Customer Details: http://localhost:3000/customers
+- Analytics: http://localhost:3000/analytics
 - API: http://localhost:8080/api/v1/payments
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health check: http://localhost:8080/actuator/health
@@ -40,6 +42,20 @@ MySQL is available on `localhost:3306`. The default development credentials in `
 The Customer Details page is restricted to the configured administrator or staff account. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME` in `.env`, then sign in when the page prompts you. Authentication uses an HTTP-only server session and the current user is resolved from that session.
 
 Only card brand and the server-generated form `XXXX XXXX XXXX 1234` are returned to the browser. Full card numbers, CVVs, passwords, and payment tokens are neither exposed by this API nor stored by the customer-card migration.
+
+### Seed development analytics data
+
+The analytics dashboard never creates sample values in the frontend. If a development database does not contain enough historical records, explicitly run the backend seeder after building the stack:
+
+```bash
+docker compose run --rm -e SPRING_PROFILES_ACTIVE=analytics-seed api
+```
+
+The command inserts deterministic demonstration records directly into the existing customer, account, card, payment, status-history, refund, and exchange-rate tables. It uses unique seed identifiers, does not overwrite or delete existing data, skips payment insertion once the database has enough records, and is safe to run repeatedly.
+
+`APP_ENVIRONMENT` must be one of `development`, `dev`, `local`, `test`, `staging`, or `demo`. The command fails before writing anything when the environment is `production` or unspecified. Seeding is never performed during normal application startup.
+
+Analytics APIs are available under `/api/v1/analytics` and require an authenticated `ADMIN` or `STAFF` session. Aggregations and all filters execute on the backend; recent transactions are database-paginated and card values are masked before serialization.
 
 ### Seed accounts
 
@@ -97,7 +113,7 @@ npm install
 npm run dev
 ```
 
-Backend only requires Java 21, Maven 3.9+, and a running MySQL database. Configuration is externalized through `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PAYMENT_MAX_AMOUNT`, `EXCHANGE_RATE_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME`.
+Backend only requires Java 21, Maven 3.9+, and a running MySQL database. Configuration is externalized through `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PAYMENT_MAX_AMOUNT`, `EXCHANGE_RATE_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_FULL_NAME`, `APP_ENVIRONMENT`, `ANALYTICS_TIME_ZONE`, `ANALYTICS_BASE_CURRENCY`, and `ANALYTICS_MAX_QUERY_ROWS`.
 
 Run verification:
 

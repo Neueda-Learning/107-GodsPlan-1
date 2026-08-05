@@ -52,3 +52,11 @@ auth:
     username: ${ADMIN_USERNAME:}
     password: ${ADMIN_PASSWORD:}
     full-name: ${ADMIN_FULL_NAME:Operations Staff}
+analytics:
+  environment: ${APP_ENVIRONMENT:production}
+  time-zone: ${ANALYTICS_TIME_ZONE:Asia/Kolkata}
+  default-range-days: 30
+  max-range-days: 1826
+  max-page-size: 100
+  max-query-rows: ${ANALYTICS_MAX_QUERY_ROWS:250000}
+  default-base-currency: ${ANALYTICS_BASE_CURRENCY:USD}

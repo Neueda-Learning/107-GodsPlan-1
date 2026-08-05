@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.godsplan.payments.config.PaymentProperties;
+import com.godsplan.payments.domain.ExchangeRateSnapshot;
 import com.godsplan.payments.error.BusinessFailure;
 import com.godsplan.payments.error.ErrorCode;
+import com.godsplan.payments.repository.ExchangeRateSnapshotRepository;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -29,13 +31,16 @@ public class ExchangeRateService {
     private static final String SOURCE = "exchangerate.host";
     private final PaymentProperties properties;
     private final ObjectMapper objectMapper;
+    private final ExchangeRateSnapshotRepository snapshots;
     private final HttpClient httpClient;
     private final Cache<String, RateQuote> cache;
     private final ConcurrentHashMap<String, Object> pairLocks = new ConcurrentHashMap<>();
 
-    public ExchangeRateService(PaymentProperties properties, ObjectMapper objectMapper) {
+    public ExchangeRateService(PaymentProperties properties, ObjectMapper objectMapper,
+                               ExchangeRateSnapshotRepository snapshots) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.snapshots = snapshots;
         Duration maxAge = properties.exchangeRate().maxAge();
         this.cache = Caffeine.newBuilder().maximumSize(100)
                 .expireAfterWrite(maxAge.toMillis(), TimeUnit.MILLISECONDS).build();
@@ -58,6 +63,7 @@ public class ExchangeRateService {
             try {
                 RateQuote fetched = fetchWithRetry(normalizedBase, normalizedQuote, amount);
                 cache.put(pair, fetched);
+                persist(normalizedBase, normalizedQuote, fetched);
                 return fetched;
             } catch (BusinessFailure failure) {
                 if (cached != null && cached.fetchedAt().plus(properties.exchangeRate().maxAge()).isAfter(Instant.now())) {
@@ -77,6 +83,13 @@ public class ExchangeRateService {
 
     private boolean isFresh(RateQuote quote) {
         return quote != null && quote.fetchedAt().plus(properties.exchangeRate().freshTtl()).isAfter(Instant.now());
+    }
+
+    private void persist(String base, String quote, RateQuote rate) {
+        if (!snapshots.existsByBaseCurrencyAndQuoteCurrencyAndSourceAndFetchedAt(
+                base, quote, rate.source(), rate.fetchedAt())) {
+            snapshots.save(new ExchangeRateSnapshot(base, quote, rate.rate(), rate.source(), rate.fetchedAt()));
+        }
     }
 
     private RateQuote fetchWithRetry(String base, String quote, BigDecimal amount) {
@@ -121,4 +134,3 @@ public class ExchangeRateService {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }
-

@@ -26,3 +26,11 @@ auth:
     username: staff@godsplan.local
     password: test-password
     full-name: Test Staff
+analytics:
+  environment: test
+  time-zone: Asia/Kolkata
+  default-range-days: 30
+  max-range-days: 1826
+  max-page-size: 100
+  max-query-rows: 250000
+  default-base-currency: USD
