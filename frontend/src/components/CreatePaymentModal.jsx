@@ -2,6 +2,7 @@ import { Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { paymentApi, apiMessage } from '../api/client'
 import { useToast } from '../hooks/useToast'
+import { generateId } from '../utils/generateId'
 
 const empty = { sourceAccountId: '', destinationAccountId: '', amount: '', currency: 'USD', reference: '' }
 const supportedCurrencies = [
@@ -16,7 +17,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
   const [form, setForm] = useState(empty)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
-  const [idempotencyKey] = useState(() => crypto.randomUUID())
+  const [idempotencyKey] = useState(() => generateId())
   const notify = useToast()
 
   useEffect(() => {

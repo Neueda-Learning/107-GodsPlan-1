@@ -1,12 +1,13 @@
 import { CheckCircle2, X, XCircle } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { ToastContext } from '../hooks/useToast'
+import { generateId } from '../utils/generateId'
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
   const dismiss = useCallback((id) => setToasts((items) => items.filter((item) => item.id !== id)), [])
   const notify = useCallback((message, type = 'success') => {
-    const id = crypto.randomUUID()
+    const id = generateId()
     setToasts((items) => [...items, { id, message, type }])
     window.setTimeout(() => dismiss(id), 4500)
   }, [dismiss])
@@ -30,4 +31,3 @@ export function ToastProvider({ children }) {
     </ToastContext.Provider>
   )
 }
-
