@@ -57,5 +57,18 @@ services:
       timeout: 3s
       retries: 5
 
+  nginx:
+    image: nginx:alpine
+    container_name: kk-nginx
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    restart: unless-stopped
+
 volumes:
   payments_mysql:
