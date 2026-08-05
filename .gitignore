@@ -1,7 +1,7 @@
 .DS_Store
 .env
 backend/target/
-frontend/node_modules/
+backend/nginx/node_modules/
 frontend/dist/
 *.log
 .idea/
