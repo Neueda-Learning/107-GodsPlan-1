@@ -34,9 +34,10 @@ ALTER TABLE payments ADD COLUMN payment_method VARCHAR(80) NOT NULL DEFAULT 'Ban
 
 INSERT INTO customer_users (id, full_name, email, role, active) VALUES
   (1, 'Operations Staff', 'staff@godsplan.local', 'ADMIN', TRUE),
-  (2, 'Anita Sharma', 'anita.sharma@example.com', 'CUSTOMER', TRUE),
-  (3, 'Rohan Mehta', 'rohan.mehta@example.com', 'CUSTOMER', TRUE),
-  (4, 'Meera Iyer', 'meera.iyer@example.com', 'CUSTOMER', TRUE);
+  (2, 'Nihal Yadav', 'nihal.yadav@example.com', 'CUSTOMER', TRUE),
+  (3, 'Sriya Patel', 'sriya.patel@example.com', 'CUSTOMER', TRUE),
+  (4, 'Shruti Sharma', 'shruti.sharma@example.com', 'CUSTOMER', TRUE),
+  (5, 'Tushar Mehta', 'tushar.mehta@example.com', 'CUSTOMER', TRUE);
 
 UPDATE accounts SET customer_id = 1 WHERE id = 1;
 UPDATE accounts SET customer_id = 2 WHERE id = 2;
