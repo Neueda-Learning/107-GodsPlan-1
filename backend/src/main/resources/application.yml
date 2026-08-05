@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: payments-api
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/payments?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:payments}
+    password: ${DB_PASSWORD:payments}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: always
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+      timeout: 30m
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+payments:
+  max-amount: ${PAYMENT_MAX_AMOUNT:1000000.00}
+  supported-currencies: USD,EUR,GBP,INR,JPY
+  exchange-rate:
+    url: https://api.exchangerate.host/convert
+    api-key: ${EXCHANGE_RATE_API_KEY:}
+    fresh-ttl: 5m
+    max-age: 30m
+    timeout: 2s
+auth:
+  admin:
+    username: ${ADMIN_USERNAME:}
+    password: ${ADMIN_PASSWORD:}
+    full-name: ${ADMIN_FULL_NAME:Operations Staff}
+analytics:
+  environment: ${APP_ENVIRONMENT:production}
+  time-zone: ${ANALYTICS_TIME_ZONE:Asia/Kolkata}
+  default-range-days: 30
+  max-range-days: 1826
+  max-page-size: 100
+  max-query-rows: ${ANALYTICS_MAX_QUERY_ROWS:250000}
+  default-base-currency: ${ANALYTICS_BASE_CURRENCY:USD}

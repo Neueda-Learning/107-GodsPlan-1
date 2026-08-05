@@ -1,0 +1,107 @@
+import { BarChart3, Loader2, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { analyticsApi, apiMessage, authApi } from '../api/client'
+import AnalyticsFilters from '../components/AnalyticsFilters'
+import AnalyticsKpiCard from '../components/AnalyticsKpiCard'
+import AnalyticsRecentTransactions from '../components/AnalyticsRecentTransactions'
+import {
+  ActivityHeatmap, CurrencyChart, CustomerGrowthChart, ExchangeRateChart, FailureReasonsChart,
+  PaymentMethodsChart, RatesChart, StatusDistribution, TopCustomers, TransactionsChart, VolumeChart,
+} from '../components/AnalyticsVisualizations'
+import LoadingSkeleton from '../components/LoadingSkeleton'
+import { formatDate } from '../utils/format'
+import { defaultAnalyticsFilters } from '../utils/analytics'
+
+function StaffLogin({ onAuthenticated }) {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false); const [error, setError] = useState('')
+  const submit = async (event) => {
+    event.preventDefault(); setLoading(true); setError('')
+    try { await authApi.login(email, password); onAuthenticated(await authApi.me()) }
+    catch (err) { setError(apiMessage(err)) } finally { setLoading(false) }
+  }
+  return <div className="mx-auto grid min-h-[calc(100vh-12rem)] max-w-md place-items-center"><section className="card w-full p-6 sm:p-8"><span className="grid size-12 place-items-center rounded-xl bg-primary-light text-primary-hover"><LockKeyhole className="size-6" /></span><h2 className="mt-5 text-2xl font-bold text-ink">Staff sign in</h2><p className="mt-2 text-sm leading-6 text-ink-muted">Analytics is restricted to authorized administrators and staff.</p><form className="mt-6 space-y-4" onSubmit={submit}><label className="block"><span className="label">Staff email</span><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label><label className="block"><span className="label">Password</span><input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>{error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}<button className="btn-primary w-full" disabled={loading}>{loading && <Loader2 className="size-4 animate-spin" />}{loading ? 'Signing in…' : 'Sign in securely'}</button></form></section></div>
+}
+
+const paramsFor = (filters) => Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '' && value !== null && value !== undefined))
+
+export default function Analytics() {
+  const [user, setUser] = useState(null); const [authLoading, setAuthLoading] = useState(true)
+  const [filters, setFilters] = useState(defaultAnalyticsFilters)
+  const [overview, setOverview] = useState(null); const [recent, setRecent] = useState(null)
+  const [loading, setLoading] = useState(true); const [recentLoading, setRecentLoading] = useState(true)
+  const [error, setError] = useState(''); const [recentError, setRecentError] = useState('')
+  const [exchange, setExchange] = useState(null); const [exchangeLoading, setExchangeLoading] = useState(false)
+  const [exchangeError, setExchangeError] = useState(''); const [pair, setPair] = useState({ source: '', target: '' })
+  const currencies = overview?.filterOptions?.currencies || []
+  const resolvedSource = pair.source || (currencies.includes('EUR') ? 'EUR' : currencies[0]) || ''
+  const resolvedTarget = pair.target || currencies.find((item) => item !== resolvedSource) || ''
+
+  useEffect(() => {
+    let active = true
+    authApi.me().then((current) => active && setUser(current)).catch(() => {}).finally(() => active && setAuthLoading(false))
+    return () => { active = false }
+  }, [])
+
+  const loadDashboard = useCallback(async (nextFilters) => {
+    const params = paramsFor(nextFilters); setLoading(true); setRecentLoading(true); setError(''); setRecentError('')
+    const [summaryResult, recentResult] = await Promise.allSettled([
+      analyticsApi.overview(params), analyticsApi.recent({ ...params, page: 0, size: 10 }),
+    ])
+    if (summaryResult.status === 'fulfilled') setOverview(summaryResult.value)
+    else { setError(apiMessage(summaryResult.reason)); if (summaryResult.reason.response?.status === 401) setUser(null) }
+    if (recentResult.status === 'fulfilled') setRecent(recentResult.value)
+    else { setRecentError(apiMessage(recentResult.reason)); if (recentResult.reason.response?.status === 401) setUser(null) }
+    setLoading(false); setRecentLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (!user || !['ADMIN', 'STAFF'].includes(user.role)) return undefined
+    const timer = setTimeout(() => loadDashboard(filters), 0)
+    return () => clearTimeout(timer)
+  }, [user, filters, loadDashboard])
+
+  const loadExchange = useCallback(async (source, target, nextFilters) => {
+    if (!source || !target || source === target) { setExchange(null); return }
+    setExchangeLoading(true); setExchangeError('')
+    try { setExchange(await analyticsApi.exchangeRates({ sourceCurrency: source, targetCurrency: target, from: nextFilters.from, to: nextFilters.to })) }
+    catch (err) { setExchangeError(apiMessage(err)) } finally { setExchangeLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    if (!user || !resolvedSource || !resolvedTarget) return undefined
+    const timer = setTimeout(() => loadExchange(resolvedSource, resolvedTarget, filters), 0)
+    return () => clearTimeout(timer)
+  }, [resolvedSource, resolvedTarget, user, filters, loadExchange])
+
+  const applyFilters = (next) => setFilters(next)
+  const changeRecentPage = async (page) => {
+    setRecentLoading(true); setRecentError('')
+    try { setRecent(await analyticsApi.recent({ ...paramsFor(filters), page, size: 10 })) }
+    catch (err) { setRecentError(apiMessage(err)) } finally { setRecentLoading(false) }
+  }
+  const changePair = (source, target) => {
+    const safeTarget = source === target ? currencies.find((item) => item !== source) || '' : target
+    setPair({ source, target: safeTarget })
+  }
+  const logout = async () => { try { await authApi.logout() } finally { setUser(null); setOverview(null) } }
+  const totalTransactions = Number(overview?.kpis?.find((item) => item.key === 'totalTransactions')?.value || 0)
+  const options = overview?.filterOptions || { statuses: [], currencies: [], paymentMethods: [], customers: [] }
+  const lastUpdated = overview?.generatedAt ? formatDate(overview.generatedAt) : '—'
+
+  if (authLoading) return <div className="mx-auto max-w-7xl"><div className="card"><LoadingSkeleton rows={8} /></div></div>
+  if (!user) return <StaffLogin onAuthenticated={setUser} />
+  if (!['ADMIN', 'STAFF'].includes(user.role)) return <div className="card mx-auto max-w-xl p-8 text-center"><LockKeyhole className="mx-auto size-10 text-danger" /><h2 className="mt-4 text-xl font-bold">Access restricted</h2><p className="mt-2 text-sm text-ink-muted">Administrator or staff access is required.</p></div>
+
+  return <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-primary-hover">Database intelligence</p><h2 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-ink"><BarChart3 className="size-6 text-primary" />Payment analytics</h2><p className="mt-1 text-sm text-ink-muted">Every metric is aggregated from stored backend records.</p></div><div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-ink-muted">Last updated</p><p className="text-sm font-semibold text-ink">{lastUpdated}</p></div><button className="btn-secondary" disabled={loading} onClick={() => { loadDashboard(filters); loadExchange(resolvedSource, resolvedTarget, filters) }}><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button><button className="btn-secondary" onClick={logout}><LogOut className="size-4" />Sign out</button></div></div>
+    <AnalyticsFilters value={filters} options={options} onApply={applyFilters} busy={loading} />
+    {error && <div className="rounded-card border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">{error}</div>}
+    {overview?.unconvertedTransactions > 0 && <div className="flex items-center gap-2 rounded-card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><ShieldCheck className="size-5 shrink-0" />{overview.unconvertedTransactions} transaction(s) were excluded from base-currency volume totals because no stored historical conversion rate was available.</div>}
+    {loading && !overview ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><div className="card"><LoadingSkeleton rows={3}/></div><div className="card"><LoadingSkeleton rows={3}/></div><div className="card"><LoadingSkeleton rows={3}/></div><div className="card"><LoadingSkeleton rows={3}/></div></div> : overview && <>
+      {totalTransactions === 0 && <div className="rounded-card border border-blue-200 bg-primary-light p-5 text-sm text-blue-900"><strong>No matching analytics records.</strong> Adjust the filters or, in a development environment, run the documented backend analytics seed command. No placeholder values are being shown.</div>}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5" aria-label="Analytics summary">{overview.kpis.map((kpi) => <AnalyticsKpiCard key={kpi.key} kpi={kpi} baseCurrency={overview.baseCurrency} />)}</section>
+      <div className="grid gap-6 xl:grid-cols-2"><StatusDistribution data={overview.paymentStatus}/><RatesChart data={overview.paymentRates}/><TransactionsChart data={overview.transactionsOverTime}/><PaymentMethodsChart data={overview.paymentMethods} baseCurrency={overview.baseCurrency}/><VolumeChart data={overview.paymentVolume} baseCurrency={overview.baseCurrency}/><CurrencyChart data={overview.currencies}/><ActivityHeatmap data={overview.activityHeatmap}/><CustomerGrowthChart data={overview.customerGrowth}/><TopCustomers data={overview.topCustomers} baseCurrency={overview.baseCurrency}/><FailureReasonsChart data={overview.failureReasons}/><ExchangeRateChart data={exchange} currencies={options.currencies} source={resolvedSource} target={resolvedTarget} onPairChange={changePair} loading={exchangeLoading} error={exchangeError}/><AnalyticsRecentTransactions data={recent} loading={recentLoading} error={recentError} onPage={changeRecentPage}/></div>
+    </>}
+  </div>
+}
