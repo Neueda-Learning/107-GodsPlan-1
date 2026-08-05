@@ -13,6 +13,7 @@ public record PaymentResponse(
         Long sourceAccountId,
         Long destinationAccountId,
         String reference,
+        String intermediaryBank,
         BigDecimal destinationAmount,
         String destinationCurrency,
         BigDecimal exchangeRate,
@@ -25,9 +26,9 @@ public record PaymentResponse(
     public static PaymentResponse from(Payment p) {
         return new PaymentResponse(p.getId(), p.getStatus(), p.getAmount(), p.getCurrency(),
                 p.getSourceAccount().getId(), p.getDestinationAccount().getId(), p.getReference(),
+                p.getIntermediaryBank(),
                 p.getDestinationAmount(), p.getDestinationAmount() == null ? null : p.getDestinationAccount().getCurrency(),
                 p.getExchangeRate(), p.getExchangeRateSource(), p.getExchangeRateFetchedAt(),
                 p.getErrorCode(), p.getErrorDescription(), p.getCreatedAt(), p.getUpdatedAt());
     }
 }
-

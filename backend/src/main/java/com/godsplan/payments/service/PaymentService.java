@@ -34,30 +34,39 @@ public class PaymentService {
     private final ExchangeRateService exchangeRates;
     private final InitialPaymentWriter initialWriter;
     private final LifecycleService lifecycle;
+    private final SettlementService settlement;
 
     public PaymentService(PaymentRepository payments, AccountRepository accounts, ValidationService validation,
                           ExchangeRateService exchangeRates, InitialPaymentWriter initialWriter,
-                          LifecycleService lifecycle) {
+                          LifecycleService lifecycle, SettlementService settlement) {
         this.payments = payments;
         this.accounts = accounts;
         this.validation = validation;
         this.exchangeRates = exchangeRates;
         this.initialWriter = initialWriter;
         this.lifecycle = lifecycle;
+        this.settlement = settlement;
     }
 
     public CreateResult create(String idempotencyKey, CreatePaymentRequest request) {
         validateKey(idempotencyKey);
         Optional<Payment> existing = payments.findByIdempotencyKey(idempotencyKey);
-        if (existing.isPresent()) return new CreateResult(PaymentResponse.from(existing.get()), false);
+        if (existing.isPresent()) return resultOrInsufficient(existing.get(), false);
 
         validation.validateAmountShape(request.amount());
         String currency = validation.normalizeAndValidateCurrency(request.currency());
-        Account source = account(request.sourceAccountId(), "source");
-        Account destination = account(request.destinationAccountId(), "destination");
+        if (request.senderCustomerId().equals(request.receiverCustomerId())) {
+            throw new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.BAD_REQUEST,
+                    "Sender and receiver must be different customers");
+        }
+        Account source = account(request.sourceAccountId(), request.senderCustomerId(), "sender");
+        Account destination = account(request.destinationAccountId(), request.receiverCustomerId(), "receiver");
         if (source.getId().equals(destination.getId())) {
             throw new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.BAD_REQUEST,
                     "Source and destination accounts must be different");
+        }
+        if (request.amount().signum() > 0 && source.getAvailableBalance().compareTo(request.amount()) < 0) {
+            throw insufficientFunds();
         }
 
         Payment created;
@@ -65,11 +74,12 @@ public class PaymentService {
             created = initialWriter.create(idempotencyKey, request, currency, source, destination);
         } catch (DataIntegrityViolationException duplicateRace) {
             Payment winner = payments.findByIdempotencyKey(idempotencyKey).orElseThrow(() -> duplicateRace);
-            return new CreateResult(PaymentResponse.from(winner), false);
+            return resultOrInsufficient(winner, false);
         }
         log.info("Created payment {} with idempotency key {}", created.getId(), idempotencyKey);
         process(created);
-        return new CreateResult(get(created.getId()), true);
+        Payment processed = payments.findById(created.getId()).orElseThrow(() -> notFound(created.getId()));
+        return resultOrInsufficient(processed, true);
     }
 
     private void process(Payment payment) {
@@ -85,8 +95,7 @@ public class PaymentService {
             } else {
                 lifecycle.validateWithRate(payment.getId(), null, null);
             }
-            lifecycle.transition(payment.getId(), PaymentStatus.SENT, null, null);
-            lifecycle.transition(payment.getId(), PaymentStatus.COMPLETED, null, null);
+            settlement.settle(payment.getId());
         } catch (BusinessFailure failure) {
             log.info("Payment {} failed validation: {}", payment.getId(), failure.getCode());
             lifecycle.transition(payment.getId(), PaymentStatus.FAILED,
@@ -116,9 +125,12 @@ public class PaymentService {
                 request.errorCode(), request.errorDescription()));
     }
 
-    private Account account(Long id, String role) {
-        return accounts.findById(id).orElseThrow(() -> new ApiException(ErrorCode.INVALID_ACCOUNT,
-                HttpStatus.BAD_REQUEST, "The " + role + " account does not exist"));
+    private Account account(Long id, Long customerId, String role) {
+        return accounts.findByIdAndCustomer_IdAndCustomer_ActiveTrueAndCustomer_RoleAndActiveTrue(
+                        id, customerId, "CUSTOMER")
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_ACCOUNT,
+                        HttpStatus.BAD_REQUEST,
+                        "The selected " + role + " account does not belong to that customer or is inactive"));
     }
 
     private void validateKey(String key) {
@@ -133,6 +145,18 @@ public class PaymentService {
                 "Payment " + id + " was not found");
     }
 
+    private CreateResult resultOrInsufficient(Payment payment, boolean created) {
+        if (payment.getStatus() == PaymentStatus.FAILED
+                && ErrorCode.INSUFFICIENT_FUNDS.name().equals(payment.getErrorCode())) {
+            throw insufficientFunds();
+        }
+        return new CreateResult(PaymentResponse.from(payment), created);
+    }
+
+    private ApiException insufficientFunds() {
+        return new ApiException(ErrorCode.INSUFFICIENT_FUNDS, HttpStatus.CONFLICT,
+                "The selected account does not have sufficient funds to complete this transaction.");
+    }
+
     public record CreateResult(PaymentResponse payment, boolean created) {}
 }
-

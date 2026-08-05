@@ -15,6 +15,9 @@ A complete training-grade payments application built from the repository require
 - Protected Customer Details workspace with staff sessions, paginated customer records, masked cards, and lazy-loaded payment history
 - Protected, database-driven Analytics workspace with backend aggregation, filters, KPI trends, interactive charts, stored FX history, refunds, heatmaps, and paginated transactions
 - Responsive desktop/tablet/mobile layouts, skeletons, toasts, empty states, accessible controls, and inline validation
+- Database-backed create-payment modal with customer selectors, dependent masked-account selectors, and backend ownership validation
+- Public payment creation and public-safe dropdown APIs; only Customers and Analytics require staff authentication
+- Live database balances with insufficient-funds checks and transactional, concurrency-safe debit/credit settlement
 - Docker-based local environment and automated backend/frontend tests
 
 ## Run the whole project
@@ -52,6 +55,8 @@ Use the following local demonstration account to access **Customers** and **Anal
 These credentials are configured through `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME` in `.env`. They are intended only for local development and should be replaced in any shared or deployed environment.
 
 Authentication uses an HTTP-only server session with CSRF protection. The backend resolves the current user from the authenticated session and independently enforces `ADMIN` or `STAFF` authorization for customer and analytics endpoints.
+
+Creating payments does not require a login. The modal uses the public `/api/v1/payment-options/**` endpoints to retrieve active customers, masked accounts, currencies, and current balances. `/api/v1/customers/**` and `/api/v1/analytics/**` remain protected.
 
 Only card brand and the server-generated form `XXXX XXXX XXXX 1234` are returned to the browser. Full card numbers, CVVs, passwords, and payment tokens are neither exposed by this API nor stored by the customer-card migration.
 
@@ -109,7 +114,9 @@ The nginx reverse proxy configuration is in `nginx.conf` at the root of the proj
 | 3 | ACC-0003 | EUR |
 | 4 | ACC-0004 | INR |
 
-Use accounts 1 → 2 for a same-currency demo that does not need any external API key.
+The create-payment form resolves these identifiers from customer and masked-account dropdowns; staff users never need to type raw IDs.
+
+Migration V6 initializes balances for the existing demonstration accounts. Completed payments lock both accounts in a deterministic order, verify the latest sender balance, debit the sender, credit the receiver, and finalize the payment in one database transaction. Concurrent requests therefore cannot overdraw an account.
 
 ### Enable live currency conversion
 
@@ -126,10 +133,13 @@ curl -i -X POST http://localhost:8080/api/v1/payments \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: demo-001' \
   -d '{
+    "senderCustomerId": 2,
+    "sourceAccountId": 2,
+    "receiverCustomerId": 5,
+    "destinationAccountId": 7,
     "amount": 250.00,
     "currency": "USD",
-    "sourceAccountId": 1,
-    "destinationAccountId": 2,
+    "intermediaryBank": null,
     "reference": "Invoice 4471"
   }'
 ```
@@ -217,4 +227,4 @@ prompt_files/, requirements/, analysis/  source specifications
 compose.yaml  MySQL + API + web orchestration
 ```
 
-Payment operations retain the original v1 access model. The privacy-sensitive Customer Details workspace adds isolated staff authentication and role checks. No real payment gateway is included; only the exchange-rate lookup is external and settlement remains simulated.
+Payment creation and its public-safe customer/account option APIs are intentionally unauthenticated. The privacy-sensitive Customer Details and Analytics workspaces retain isolated staff authentication and role checks. No real payment gateway is included; only the exchange-rate lookup is external, while account balance settlement is performed inside the local database.

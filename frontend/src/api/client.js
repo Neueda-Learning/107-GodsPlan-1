@@ -41,6 +41,9 @@ export const authApi = {
 
 export const customerApi = {
   list: (params = {}) => client.get('/customers', { params }).then(({ data }) => data),
+  paymentOptions: () => client.get('/payment-options/customers').then(({ data }) => data),
+  accounts: (customerId) => client.get(`/payment-options/customers/${customerId}/accounts`).then(({ data }) => data),
+  account: (customerId, accountId) => client.get(`/payment-options/customers/${customerId}/accounts/${accountId}`).then(({ data }) => data),
   transactions: (customerId, params = {}) => client.get(`/customers/${customerId}/transactions`, { params }).then(({ data }) => data),
 }
 
