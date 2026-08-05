@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:payments;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+payments:
+  max-amount: 1000000.00
+  supported-currencies: USD,EUR,GBP,INR,JPY
+  exchange-rate:
+    url: https://api.exchangerate.host/convert
+    api-key: ""
+    fresh-ttl: 5m
+    max-age: 30m
+    timeout: 2s
+
