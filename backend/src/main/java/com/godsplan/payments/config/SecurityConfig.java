@@ -46,7 +46,8 @@ public class SecurityConfig {
                         .ignoringRequestMatchers("/api/v1/payments/**", "/api/v1/exchange-rates/**"))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**",
-                                "/swagger-ui.html", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
+                                "/swagger-ui.html", "/api/v1/auth/csrf", "/api/v1/auth/login",
+                                "/api/v1/payment-options/**", "/api/v1/payments/**").permitAll()
                         .requestMatchers("/api/v1/customers/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/analytics/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").authenticated()

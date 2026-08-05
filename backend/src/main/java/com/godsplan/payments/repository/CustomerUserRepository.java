@@ -9,6 +9,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CustomerUserRepository extends JpaRepository<CustomerUser, Long> {
     Page<CustomerUser> findByActiveTrueAndRoleAndEmailNotIgnoreCase(String role, String email, Pageable pageable);
-    List<CustomerUser> findByActiveTrueAndRoleAndEmailNotIgnoreCaseOrderByFullNameAsc(String role, String email);
+    List<CustomerUser> findByActiveTrueAndRoleOrderByFullNameAsc(String role);
     Optional<CustomerUser> findByIdAndActiveTrue(Long id);
 }

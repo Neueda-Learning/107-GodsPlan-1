@@ -34,22 +34,24 @@ public class PaymentService {
     private final ExchangeRateService exchangeRates;
     private final InitialPaymentWriter initialWriter;
     private final LifecycleService lifecycle;
+    private final SettlementService settlement;
 
     public PaymentService(PaymentRepository payments, AccountRepository accounts, ValidationService validation,
                           ExchangeRateService exchangeRates, InitialPaymentWriter initialWriter,
-                          LifecycleService lifecycle) {
+                          LifecycleService lifecycle, SettlementService settlement) {
         this.payments = payments;
         this.accounts = accounts;
         this.validation = validation;
         this.exchangeRates = exchangeRates;
         this.initialWriter = initialWriter;
         this.lifecycle = lifecycle;
+        this.settlement = settlement;
     }
 
     public CreateResult create(String idempotencyKey, CreatePaymentRequest request) {
         validateKey(idempotencyKey);
         Optional<Payment> existing = payments.findByIdempotencyKey(idempotencyKey);
-        if (existing.isPresent()) return new CreateResult(PaymentResponse.from(existing.get()), false);
+        if (existing.isPresent()) return resultOrInsufficient(existing.get(), false);
 
         validation.validateAmountShape(request.amount());
         String currency = validation.normalizeAndValidateCurrency(request.currency());
@@ -63,17 +65,21 @@ public class PaymentService {
             throw new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.BAD_REQUEST,
                     "Source and destination accounts must be different");
         }
+        if (request.amount().signum() > 0 && source.getAvailableBalance().compareTo(request.amount()) < 0) {
+            throw insufficientFunds();
+        }
 
         Payment created;
         try {
             created = initialWriter.create(idempotencyKey, request, currency, source, destination);
         } catch (DataIntegrityViolationException duplicateRace) {
             Payment winner = payments.findByIdempotencyKey(idempotencyKey).orElseThrow(() -> duplicateRace);
-            return new CreateResult(PaymentResponse.from(winner), false);
+            return resultOrInsufficient(winner, false);
         }
         log.info("Created payment {} with idempotency key {}", created.getId(), idempotencyKey);
         process(created);
-        return new CreateResult(get(created.getId()), true);
+        Payment processed = payments.findById(created.getId()).orElseThrow(() -> notFound(created.getId()));
+        return resultOrInsufficient(processed, true);
     }
 
     private void process(Payment payment) {
@@ -89,8 +95,7 @@ public class PaymentService {
             } else {
                 lifecycle.validateWithRate(payment.getId(), null, null);
             }
-            lifecycle.transition(payment.getId(), PaymentStatus.SENT, null, null);
-            lifecycle.transition(payment.getId(), PaymentStatus.COMPLETED, null, null);
+            settlement.settle(payment.getId());
         } catch (BusinessFailure failure) {
             log.info("Payment {} failed validation: {}", payment.getId(), failure.getCode());
             lifecycle.transition(payment.getId(), PaymentStatus.FAILED,
@@ -138,6 +143,19 @@ public class PaymentService {
     private ApiException notFound(Long id) {
         return new ApiException(ErrorCode.PAYMENT_NOT_FOUND, HttpStatus.NOT_FOUND,
                 "Payment " + id + " was not found");
+    }
+
+    private CreateResult resultOrInsufficient(Payment payment, boolean created) {
+        if (payment.getStatus() == PaymentStatus.FAILED
+                && ErrorCode.INSUFFICIENT_FUNDS.name().equals(payment.getErrorCode())) {
+            throw insufficientFunds();
+        }
+        return new CreateResult(PaymentResponse.from(payment), created);
+    }
+
+    private ApiException insufficientFunds() {
+        return new ApiException(ErrorCode.INSUFFICIENT_FUNDS, HttpStatus.CONFLICT,
+                "The selected account does not have sufficient funds to complete this transaction.");
     }
 
     public record CreateResult(PaymentResponse payment, boolean created) {}

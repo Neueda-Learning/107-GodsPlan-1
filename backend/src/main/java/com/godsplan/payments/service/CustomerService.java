@@ -53,9 +53,8 @@ public class CustomerService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentCustomerOptionResponse> paymentOptions(String currentUserEmail) {
-        return customers
-                .findByActiveTrueAndRoleAndEmailNotIgnoreCaseOrderByFullNameAsc("CUSTOMER", currentUserEmail)
+    public List<PaymentCustomerOptionResponse> paymentOptions() {
+        return customers.findByActiveTrueAndRoleOrderByFullNameAsc("CUSTOMER")
                 .stream()
                 .map(customer -> new PaymentCustomerOptionResponse(customer.getId(), customer.getFullName(),
                         customer.getCountry()))
@@ -63,16 +62,22 @@ public class CustomerService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentAccountOptionResponse> accountOptions(Long customerId, String currentUserEmail) {
-        customer(customerId, currentUserEmail);
+    public List<PaymentAccountOptionResponse> accountOptions(Long customerId) {
+        paymentCustomer(customerId);
         return accounts.findByCustomerIdAndActiveTrueOrderByIdAsc(customerId).stream()
-                .map(account -> {
-                    String masked = maskAccount(account.getAccountNumber());
-                    String label = account.getAccountType() + " · " + masked + " · " + account.getCurrency();
-                    return new PaymentAccountOptionResponse(account.getId(), account.getAccountType(), masked,
-                            account.getCurrency(), label);
-                })
+                .map(this::toPaymentAccount)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentAccountOptionResponse accountOption(Long customerId, Long accountId) {
+        paymentCustomer(customerId);
+        var account = accounts
+                .findByIdAndCustomer_IdAndCustomer_ActiveTrueAndCustomer_RoleAndActiveTrue(
+                        accountId, customerId, "CUSTOMER")
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.NOT_FOUND,
+                        "The selected account does not exist or is inactive"));
+        return toPaymentAccount(account);
     }
 
     private CustomerResponse toResponse(CustomerUser customer) {
@@ -96,11 +101,16 @@ public class CustomerService {
         return "XXXX " + lastFour;
     }
 
-    private CustomerUser customer(Long id, String currentUserEmail) {
+    private PaymentAccountOptionResponse toPaymentAccount(com.godsplan.payments.domain.Account account) {
+        String masked = maskAccount(account.getAccountNumber());
+        String label = account.getAccountType() + " · " + masked + " · " + account.getCurrency();
+        return new PaymentAccountOptionResponse(account.getId(), account.getAccountType(), masked,
+                account.getCurrency(), account.getAvailableBalance(), label);
+    }
+
+    private CustomerUser paymentCustomer(Long id) {
         CustomerUser customer = customers.findByIdAndActiveTrue(id).orElseThrow(() -> notFound(id));
-        if (!"CUSTOMER".equals(customer.getRole()) || customer.getEmail().equalsIgnoreCase(currentUserEmail)) {
-            throw notFound(id);
-        }
+        if (!"CUSTOMER".equals(customer.getRole())) throw notFound(id);
         return customer;
     }
 
