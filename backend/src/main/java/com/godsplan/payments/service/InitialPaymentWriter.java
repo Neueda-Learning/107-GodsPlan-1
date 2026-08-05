@@ -31,10 +31,11 @@ public class InitialPaymentWriter {
         payment.setSourceAccount(source);
         payment.setDestinationAccount(destination);
         payment.setReference(request.reference() == null || request.reference().isBlank() ? null : request.reference().trim());
+        payment.setIntermediaryBank(request.intermediaryBank() == null || request.intermediaryBank().isBlank()
+                ? null : request.intermediaryBank().trim());
         payment.setStatus(PaymentStatus.CREATED);
         payments.saveAndFlush(payment);
         history.save(new PaymentStatusHistory(payment, null, PaymentStatus.CREATED, null, null));
         return payment;
     }
 }
-

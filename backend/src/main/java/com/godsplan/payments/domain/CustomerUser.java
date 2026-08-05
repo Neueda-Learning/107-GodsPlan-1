@@ -16,6 +16,8 @@ public class CustomerUser {
     private String fullName;
     @Column(nullable = false, unique = true, length = 190)
     private String email;
+    @Column(nullable = false, length = 80)
+    private String country;
     @Column(nullable = false, length = 20)
     private String role;
     @Column(nullable = false)
@@ -23,4 +25,3 @@ public class CustomerUser {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 }
-

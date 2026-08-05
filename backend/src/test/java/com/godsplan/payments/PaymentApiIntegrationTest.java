@@ -25,6 +25,10 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,11 +47,13 @@ class PaymentApiIntegrationTest {
         jdbc.update("DELETE FROM payments");
         jdbc.update("DELETE FROM accounts");
         jdbc.update("DELETE FROM customer_users");
-        jdbc.update("INSERT INTO customer_users (id, full_name, email, role, active, created_at) VALUES (1, 'Test Staff', 'staff@godsplan.local', 'ADMIN', true, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO customer_users (id, full_name, email, role, active, created_at) VALUES (2, 'Test Customer', 'customer@example.com', 'CUSTOMER', true, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO accounts (id, account_number, currency, active, customer_id, created_at) VALUES (1, 'ACC-0001', 'USD', true, 1, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO accounts (id, account_number, currency, active, customer_id, created_at) VALUES (2, 'ACC-0002', 'USD', true, 2, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO accounts (id, account_number, currency, active, customer_id, created_at) VALUES (3, 'ACC-0003', 'EUR', true, 2, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO customer_users (id, full_name, email, country, role, active, created_at) VALUES (1, 'Test Staff', 'staff@godsplan.local', 'India', 'ADMIN', true, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO customer_users (id, full_name, email, country, role, active, created_at) VALUES (2, 'Test Customer', 'customer@example.com', 'India', 'CUSTOMER', true, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO customer_users (id, full_name, email, country, role, active, created_at) VALUES (3, 'Test Receiver', 'receiver@example.com', 'Singapore', 'CUSTOMER', true, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, available_balance, active, customer_id, created_at) VALUES (1, 'ACC-0001', 'Checking Account', 'USD', 1000.00, true, 1, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, available_balance, active, customer_id, created_at) VALUES (2, 'ACC-0002', 'Savings Account', 'USD', 1000.00, true, 2, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, available_balance, active, customer_id, created_at) VALUES (3, 'ACC-0003', 'Checking Account', 'EUR', 1000.00, true, 2, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, available_balance, active, customer_id, created_at) VALUES (4, 'ACC-0004', 'Savings Account', 'USD', 500.00, true, 3, CURRENT_TIMESTAMP)");
         jdbc.update("INSERT INTO payment_cards (id, customer_id, account_id, brand, last_four, expiry_month, expiry_year, active, created_at) VALUES (1, 2, 2, 'Visa', '1234', 8, 2029, true, CURRENT_TIMESTAMP)");
     }
 
@@ -68,6 +74,10 @@ class PaymentApiIntegrationTest {
                 .andExpect(jsonPath("$.history", hasSize(4)))
                 .andExpect(jsonPath("$.history[0].toStatus").value("CREATED"))
                 .andExpect(jsonPath("$.history[3].toStatus").value("COMPLETED"));
+        assertEquals(0, new java.math.BigDecimal("874.50").compareTo(
+                jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
+        assertEquals(0, new java.math.BigDecimal("625.50").compareTo(
+                jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 4", java.math.BigDecimal.class)));
     }
 
     @Test
@@ -205,9 +215,11 @@ class PaymentApiIntegrationTest {
 
         mvc.perform(get("/api/v1/customers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].fullName").value("Test Customer"))
                 .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
+                .andExpect(jsonPath("$.content[0].accounts[0].maskedAccountNumber").value("XXXX 0002"))
+                .andExpect(jsonPath("$.content[0].accounts[0].accountNumber").doesNotExist())
                 .andExpect(jsonPath("$.content[0].lastFour").doesNotExist());
 
         mvc.perform(get("/api/v1/customers/2/transactions"))
@@ -216,9 +228,87 @@ class PaymentApiIntegrationTest {
                 .andExpect(jsonPath("$.content[0].paymentMethod").value("Bank transfer"));
     }
 
+    @Test
+    void paymentOptionsArePublicDatabaseBackedAndAccountsAreMasked() throws Exception {
+        mvc.perform(get("/api/v1/payment-options/customers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].fullName").value("Test Customer"))
+                .andExpect(jsonPath("$[0].country").value("India"));
+
+        mvc.perform(get("/api/v1/payment-options/customers/2/accounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].label").value("Savings Account · XXXX 0002 · USD"))
+                .andExpect(jsonPath("$[0].maskedAccountNumber").value("XXXX 0002"))
+                .andExpect(jsonPath("$[0].availableBalance").value(1000.00))
+                .andExpect(jsonPath("$[0].accountNumber").doesNotExist());
+
+        mvc.perform(get("/api/v1/payment-options/customers/2/accounts/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availableBalance").value(1000.00))
+                .andExpect(jsonPath("$.currency").value("USD"));
+    }
+
+    @Test
+    void rejectsInsufficientFundsWithoutChangingBalances() throws Exception {
+        mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-NO-FUNDS")
+                        .contentType(MediaType.APPLICATION_JSON).content(request("1000.01")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INSUFFICIENT_FUNDS"))
+                .andExpect(jsonPath("$.message").value(
+                        "The selected account does not have sufficient funds to complete this transaction."));
+        assertEquals(0, new java.math.BigDecimal("1000.00").compareTo(
+                jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM payments WHERE idempotency_key = 'IK-NO-FUNDS'", Long.class));
+    }
+
+    @Test
+    void concurrentTransfersCannotOverdrawTheSenderAccount() throws Exception {
+        var executor = Executors.newFixedThreadPool(2);
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        try {
+            var first = executor.submit(() -> concurrentPayment("IK-CONCURRENT-1", ready, start));
+            var second = executor.submit(() -> concurrentPayment("IK-CONCURRENT-2", ready, start));
+            ready.await(5, TimeUnit.SECONDS);
+            start.countDown();
+            List<Integer> statuses = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+
+            assertEquals(1, statuses.stream().filter(status -> status == 201).count());
+            assertEquals(1, statuses.stream().filter(status -> status == 409).count());
+            assertEquals(0, new java.math.BigDecimal("300.00").compareTo(
+                    jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
+            assertEquals(0, new java.math.BigDecimal("1200.00").compareTo(
+                    jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 4", java.math.BigDecimal.class)));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void rejectsAnAccountThatDoesNotBelongToTheSubmittedCustomer() throws Exception {
+        mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-OWNERSHIP")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"senderCustomerId\":2,\"sourceAccountId\":1,\"receiverCustomerId\":1,"
+                                + "\"destinationAccountId\":2,\"amount\":10,\"currency\":\"USD\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCOUNT"));
+    }
+
     private String request(String amount) {
-        return "{\"amount\":" + amount + ",\"currency\":\"USD\",\"sourceAccountId\":1,"
-                + "\"destinationAccountId\":2,\"reference\":\"Test payment\"}";
+        return "{\"senderCustomerId\":2,\"sourceAccountId\":2,\"receiverCustomerId\":3,"
+                + "\"destinationAccountId\":4,\"amount\":" + amount + ",\"currency\":\"USD\","
+                + "\"intermediaryBank\":\"Correspondent Bank\",\"reference\":\"Test payment\"}";
+    }
+
+    private int concurrentPayment(String key, CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        start.await(5, TimeUnit.SECONDS);
+        return mvc.perform(post("/api/v1/payments").header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content(request("700.00")))
+                .andReturn().getResponse().getStatus();
     }
 
     private long analyticsPayment(String key, String amount, String currency, String status,

@@ -31,6 +31,8 @@ public class Payment {
     private Account destinationAccount;
     @Column(length = 200)
     private String reference;
+    @Column(name = "intermediary_bank", length = 120)
+    private String intermediaryBank;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PaymentStatus status;
