@@ -29,29 +29,31 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
+
 RUN npm ci
 
-# Copy source code
+# Copy React source
 COPY . .
 
-# API URL passed during build
-ARG VITE_API_URL=http://localhost:8080/api/v1
+# API URL for production
+ARG VITE_API_URL=/api/v1
+
 ENV VITE_API_URL=$VITE_API_URL
 
-# Create production build
+# Build React app
 RUN npm run build
 
 
-# ---------- Serve using nginx ----------
+# ---------- Serve React using nginx ----------
 FROM nginx:1.27-alpine
 
-# Remove default nginx content
+# Remove default nginx files
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy React production build
+# Copy React build output
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
+# Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
