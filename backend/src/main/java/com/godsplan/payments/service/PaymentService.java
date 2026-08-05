@@ -53,8 +53,12 @@ public class PaymentService {
 
         validation.validateAmountShape(request.amount());
         String currency = validation.normalizeAndValidateCurrency(request.currency());
-        Account source = account(request.sourceAccountId(), "source");
-        Account destination = account(request.destinationAccountId(), "destination");
+        if (request.senderCustomerId().equals(request.receiverCustomerId())) {
+            throw new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.BAD_REQUEST,
+                    "Sender and receiver must be different customers");
+        }
+        Account source = account(request.sourceAccountId(), request.senderCustomerId(), "sender");
+        Account destination = account(request.destinationAccountId(), request.receiverCustomerId(), "receiver");
         if (source.getId().equals(destination.getId())) {
             throw new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.BAD_REQUEST,
                     "Source and destination accounts must be different");
@@ -116,9 +120,12 @@ public class PaymentService {
                 request.errorCode(), request.errorDescription()));
     }
 
-    private Account account(Long id, String role) {
-        return accounts.findById(id).orElseThrow(() -> new ApiException(ErrorCode.INVALID_ACCOUNT,
-                HttpStatus.BAD_REQUEST, "The " + role + " account does not exist"));
+    private Account account(Long id, Long customerId, String role) {
+        return accounts.findByIdAndCustomer_IdAndCustomer_ActiveTrueAndCustomer_RoleAndActiveTrue(
+                        id, customerId, "CUSTOMER")
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_ACCOUNT,
+                        HttpStatus.BAD_REQUEST,
+                        "The selected " + role + " account does not belong to that customer or is inactive"));
     }
 
     private void validateKey(String key) {
@@ -135,4 +142,3 @@ public class PaymentService {
 
     public record CreateResult(PaymentResponse payment, boolean created) {}
 }
-

@@ -14,6 +14,8 @@ public class Account {
     private Long id;
     @Column(name = "account_number", nullable = false, unique = true, length = 34)
     private String accountNumber;
+    @Column(name = "account_type", nullable = false, length = 40)
+    private String accountType;
     @Column(nullable = false, length = 3, columnDefinition = "char(3)")
     private String currency;
     @Column(nullable = false)

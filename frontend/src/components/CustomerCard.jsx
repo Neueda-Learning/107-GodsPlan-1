@@ -35,7 +35,7 @@ export default function CustomerCard({ customer }) {
         {customer.cardBrand && <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-ink-muted">{customer.cardBrand}</span>}
       </div>
       <div className="mt-5 border-t border-line pt-5"><div className="mb-3 flex items-center gap-2"><Landmark className="size-4 text-primary-hover" /><h4 className="text-sm font-bold text-ink">Accounts</h4></div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{customer.accounts.map((account) => <div key={account.id} className="rounded-xl border border-line bg-canvas p-3"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-ink">{account.accountNumber}</p><span className={`size-2 rounded-full ${account.active ? 'bg-success' : 'bg-slate-300'}`} /></div><p className="mt-1 text-xs text-ink-muted">{account.currency} account · ID {account.id}</p></div>)}</div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{customer.accounts.map((account) => <div key={account.id} className="rounded-xl border border-line bg-canvas p-3"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-ink">{account.maskedAccountNumber}</p><span className={`size-2 rounded-full ${account.active ? 'bg-success' : 'bg-slate-300'}`} /></div><p className="mt-1 text-xs text-ink-muted">{account.accountType} · {account.currency}</p></div>)}</div>
       </div>
     </div>
     <button onClick={toggle} className="flex w-full items-center justify-between border-t border-line bg-slate-50/70 px-5 py-3.5 text-sm font-semibold text-ink transition hover:bg-primary-light/60 sm:px-6">

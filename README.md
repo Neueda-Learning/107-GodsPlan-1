@@ -15,6 +15,7 @@ A complete training-grade payments application built from the repository require
 - Protected Customer Details workspace with staff sessions, paginated customer records, masked cards, and lazy-loaded payment history
 - Protected, database-driven Analytics workspace with backend aggregation, filters, KPI trends, interactive charts, stored FX history, refunds, heatmaps, and paginated transactions
 - Responsive desktop/tablet/mobile layouts, skeletons, toasts, empty states, accessible controls, and inline validation
+- Database-backed create-payment modal with customer selectors, dependent masked-account selectors, and backend ownership validation
 - Docker-based local environment and automated backend/frontend tests
 
 ## Run the whole project
@@ -82,7 +83,7 @@ docker compose down
 | 3 | ACC-0003 | EUR |
 | 4 | ACC-0004 | INR |
 
-Use accounts 1 → 2 for a same-currency demo that does not need any external API key.
+The create-payment form resolves these identifiers from customer and masked-account dropdowns; staff users never need to type raw IDs.
 
 ### Enable live currency conversion
 
@@ -99,10 +100,13 @@ curl -i -X POST http://localhost:8080/api/v1/payments \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: demo-001' \
   -d '{
+    "senderCustomerId": 2,
+    "sourceAccountId": 2,
+    "receiverCustomerId": 5,
+    "destinationAccountId": 7,
     "amount": 250.00,
     "currency": "USD",
-    "sourceAccountId": 1,
-    "destinationAccountId": 2,
+    "intermediaryBank": null,
     "reference": "Invoice 4471"
   }'
 ```

@@ -43,11 +43,13 @@ class PaymentApiIntegrationTest {
         jdbc.update("DELETE FROM payments");
         jdbc.update("DELETE FROM accounts");
         jdbc.update("DELETE FROM customer_users");
-        jdbc.update("INSERT INTO customer_users (id, full_name, email, role, active, created_at) VALUES (1, 'Test Staff', 'staff@godsplan.local', 'ADMIN', true, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO customer_users (id, full_name, email, role, active, created_at) VALUES (2, 'Test Customer', 'customer@example.com', 'CUSTOMER', true, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO accounts (id, account_number, currency, active, customer_id, created_at) VALUES (1, 'ACC-0001', 'USD', true, 1, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO accounts (id, account_number, currency, active, customer_id, created_at) VALUES (2, 'ACC-0002', 'USD', true, 2, CURRENT_TIMESTAMP)");
-        jdbc.update("INSERT INTO accounts (id, account_number, currency, active, customer_id, created_at) VALUES (3, 'ACC-0003', 'EUR', true, 2, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO customer_users (id, full_name, email, country, role, active, created_at) VALUES (1, 'Test Staff', 'staff@godsplan.local', 'India', 'ADMIN', true, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO customer_users (id, full_name, email, country, role, active, created_at) VALUES (2, 'Test Customer', 'customer@example.com', 'India', 'CUSTOMER', true, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO customer_users (id, full_name, email, country, role, active, created_at) VALUES (3, 'Test Receiver', 'receiver@example.com', 'Singapore', 'CUSTOMER', true, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, active, customer_id, created_at) VALUES (1, 'ACC-0001', 'Checking Account', 'USD', true, 1, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, active, customer_id, created_at) VALUES (2, 'ACC-0002', 'Savings Account', 'USD', true, 2, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, active, customer_id, created_at) VALUES (3, 'ACC-0003', 'Checking Account', 'EUR', true, 2, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO accounts (id, account_number, account_type, currency, active, customer_id, created_at) VALUES (4, 'ACC-0004', 'Savings Account', 'USD', true, 3, CURRENT_TIMESTAMP)");
         jdbc.update("INSERT INTO payment_cards (id, customer_id, account_id, brand, last_four, expiry_month, expiry_year, active, created_at) VALUES (1, 2, 2, 'Visa', '1234', 8, 2029, true, CURRENT_TIMESTAMP)");
     }
 
@@ -205,9 +207,11 @@ class PaymentApiIntegrationTest {
 
         mvc.perform(get("/api/v1/customers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].fullName").value("Test Customer"))
                 .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
+                .andExpect(jsonPath("$.content[0].accounts[0].maskedAccountNumber").value("XXXX 0002"))
+                .andExpect(jsonPath("$.content[0].accounts[0].accountNumber").doesNotExist())
                 .andExpect(jsonPath("$.content[0].lastFour").doesNotExist());
 
         mvc.perform(get("/api/v1/customers/2/transactions"))
@@ -216,9 +220,37 @@ class PaymentApiIntegrationTest {
                 .andExpect(jsonPath("$.content[0].paymentMethod").value("Bank transfer"));
     }
 
+    @Test
+    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
+    void paymentOptionsComeFromDatabaseAndAccountsAreMasked() throws Exception {
+        mvc.perform(get("/api/v1/customers/payment-options"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].fullName").value("Test Customer"))
+                .andExpect(jsonPath("$[0].country").value("India"));
+
+        mvc.perform(get("/api/v1/customers/2/accounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].label").value("Savings Account · XXXX 0002 · USD"))
+                .andExpect(jsonPath("$[0].maskedAccountNumber").value("XXXX 0002"))
+                .andExpect(jsonPath("$[0].accountNumber").doesNotExist());
+    }
+
+    @Test
+    void rejectsAnAccountThatDoesNotBelongToTheSubmittedCustomer() throws Exception {
+        mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-OWNERSHIP")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"senderCustomerId\":2,\"sourceAccountId\":1,\"receiverCustomerId\":1,"
+                                + "\"destinationAccountId\":2,\"amount\":10,\"currency\":\"USD\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ACCOUNT"));
+    }
+
     private String request(String amount) {
-        return "{\"amount\":" + amount + ",\"currency\":\"USD\",\"sourceAccountId\":1,"
-                + "\"destinationAccountId\":2,\"reference\":\"Test payment\"}";
+        return "{\"senderCustomerId\":2,\"sourceAccountId\":2,\"receiverCustomerId\":3,"
+                + "\"destinationAccountId\":4,\"amount\":" + amount + ",\"currency\":\"USD\","
+                + "\"intermediaryBank\":\"Correspondent Bank\",\"reference\":\"Test payment\"}";
     }
 
     private long analyticsPayment(String key, String amount, String currency, String status,

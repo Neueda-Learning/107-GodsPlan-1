@@ -76,14 +76,14 @@ public class AnalyticsSeedService {
         for (int index = 0; index < names.length; index++) {
             String email = String.format("analytics.demo%02d@example.test", index + 1);
             if (!exists("SELECT COUNT(*) FROM customer_users WHERE email = ?", email)) {
-                jdbc.update("INSERT INTO customer_users (full_name, email, role, active, created_at) VALUES (?, ?, 'CUSTOMER', TRUE, ?)",
+                jdbc.update("INSERT INTO customer_users (full_name, email, country, role, active, created_at) VALUES (?, ?, 'India', 'CUSTOMER', TRUE, ?)",
                         names[index], email, Timestamp.from(now.minus(210L - index * 12L, ChronoUnit.DAYS)));
             }
             Long customerId = jdbc.queryForObject("SELECT id FROM customer_users WHERE email = ?", Long.class, email);
             String accountNumber = String.format("ANL-%04d", index + 1);
             if (!exists("SELECT COUNT(*) FROM accounts WHERE account_number = ?", accountNumber)) {
-                jdbc.update("INSERT INTO accounts (account_number, currency, active, customer_id, created_at) VALUES (?, ?, TRUE, ?, ?)",
-                        accountNumber, currencies[index], customerId,
+                jdbc.update("INSERT INTO accounts (account_number, account_type, currency, active, customer_id, created_at) VALUES (?, ?, ?, TRUE, ?, ?)",
+                        accountNumber, index % 2 == 0 ? "Checking Account" : "Savings Account", currencies[index], customerId,
                         Timestamp.from(now.minus(200L - index * 10L, ChronoUnit.DAYS)));
             }
             Long accountId = jdbc.queryForObject("SELECT id FROM accounts WHERE account_number = ?", Long.class, accountNumber);
