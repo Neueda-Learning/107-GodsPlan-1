@@ -48,7 +48,7 @@ function PaymentJourney({ payment, history }) {
 }
 
 export default function Dashboard() {
-  const { refreshToken, openCreate, currentUser } = useOutletContext()
+  const { refreshToken, openCreate } = useOutletContext()
   const navigate = useNavigate()
   const [paymentPage, setPaymentPage] = useState(null)
   const [counts, setCounts] = useState({})
@@ -80,14 +80,13 @@ export default function Dashboard() {
 
   useEffect(() => { const timer = setTimeout(loadPayments, 0); return () => clearTimeout(timer) }, [loadPayments, refreshToken])
   useEffect(() => {
-    if (!currentUser) return undefined
     let active = true
     const timer = setTimeout(() => {
       setAnalyticsLoading(true)
       analyticsApi.overview(analyticsRange(period)).then((data) => active && setOverview(data)).catch(() => active && setOverview(null)).finally(() => active && setAnalyticsLoading(false))
     }, 0)
     return () => { active = false; clearTimeout(timer) }
-  }, [currentUser, period, refreshToken])
+  }, [period, refreshToken])
 
   const payments = paymentPage?.content || []
   const processing = Number(counts.CREATED || 0) + Number(counts.VALIDATED || 0) + Number(counts.SENT || 0)

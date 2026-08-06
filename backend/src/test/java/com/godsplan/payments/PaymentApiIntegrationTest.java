@@ -163,7 +163,7 @@ class PaymentApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(3))
                 .andExpect(jsonPath("$.content", hasSize(2)))
-                .andExpect(jsonPath("$.content[0].cardNumber").value("1234"))
+                .andExpect(jsonPath("$.content[0].cardNumber").value("XXXX XXXX XXXX 1234"))
                 .andExpect(jsonPath("$.content[0].cvv").doesNotExist())
                 .andExpect(jsonPath("$.content[0].paymentToken").doesNotExist());
     }

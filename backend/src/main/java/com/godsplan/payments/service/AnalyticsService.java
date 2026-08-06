@@ -74,7 +74,7 @@ public class AnalyticsService {
             + fromSql + parts.where + " ORDER BY tx.created_at DESC, tx.id DESC LIMIT :limit OFFSET :offset";
         List<AnalyticsResponse.RecentTransaction> content = jdbc.query(sql, parts.params, (rs, rowNum) ->
             new AnalyticsResponse.RecentTransaction(rs.getString("source_type"), rs.getLong("id"),
-                rs.getLong("customer_id"), rs.getString("full_name"), rs.getString("last_four"),
+                rs.getLong("customer_id"), rs.getString("full_name"), maskCard(rs.getString("last_four")),
                 rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("payment_method"),
                 rs.getString("outcome"), instant(rs, "created_at"), rs.getString("error_description")));
         long count = total == null ? 0 : total;
@@ -191,7 +191,7 @@ public class AnalyticsService {
                 rs.getBigDecimal("refund_normalized_amount"), rs.getString("currency"),
                 rs.getString("payment_method"), rs.getString("outcome"), rs.getString("error_code"),
                 rs.getString("error_description"), instant(rs, "created_at"), rs.getLong("customer_id"),
-                rs.getString("full_name"), rs.getString("customer_role"), rs.getString("last_four"),
+                rs.getString("full_name"), rs.getString("customer_role"), maskCard(rs.getString("last_four")),
                 instant(rs, "first_payment_at"));
     }
 
@@ -253,7 +253,7 @@ public class AnalyticsService {
                 kpi("paymentSuccessRate", "Payment success rate", rate(current.succeededAttempts(), current.completedAttempts()), rate(previous.succeededAttempts(), previous.completedAttempts()), "percent", current.spark("successRate")),
                 kpi("paymentFailureRate", "Payment failure rate", rate(current.failed, current.completedAttempts()), rate(previous.failed, previous.completedAttempts()), "percent", current.spark("failureRate")),
                 kpi("totalCustomers", "Total customers", bd(current.totalCustomers), bd(previous.totalCustomers), "count", current.sparkCustomers(false)),
-                kpi("activeCustomers", "Active customers", bd(current.activeCustomers.size()), bd(previous.activeCustomers.size()), "count", current.sparkCustomers(true))
+                kpi("activeCustomers", "Total active customers", bd(current.activeCustomers.size()), bd(previous.activeCustomers.size()), "count", current.sparkCustomers(true))
         );
     }
 
@@ -353,6 +353,9 @@ public class AnalyticsService {
 
     private static BigDecimal bd(long value) { return BigDecimal.valueOf(value); }
     private static BigDecimal scale(BigDecimal value) { return value == null ? BigDecimal.ZERO : value.setScale(2, RoundingMode.HALF_UP); }
+    private static String maskCard(String lastFour) {
+        return lastFour == null || lastFour.isBlank() ? null : "XXXX XXXX XXXX " + lastFour;
+    }
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         Timestamp value = rs.getTimestamp(column);
         return value == null ? null : value.toInstant();
