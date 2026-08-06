@@ -45,13 +45,13 @@ public class SettlementService {
         if (source == null || destination == null || !source.isActive() || !destination.isActive()) {
             throw new BusinessFailure(ErrorCode.INVALID_ACCOUNT, "Source and destination accounts must be active");
         }
-        if (source.getAvailableBalance().compareTo(payment.getAmount()) < 0) {
+        if (source.getAvailableBalance().compareTo(payment.getAmount().add(payment.getFee())) < 0) {
             throw new BusinessFailure(ErrorCode.INSUFFICIENT_FUNDS, INSUFFICIENT_MESSAGE);
         }
 
         BigDecimal destinationCredit = payment.getDestinationAmount() == null
                 ? payment.getAmount() : payment.getDestinationAmount();
-        source.debit(payment.getAmount());
+        source.debit(payment.getAmount().add(payment.getFee()));
         destination.credit(destinationCredit);
         accounts.saveAll(List.of(source, destination));
         lifecycle.transition(paymentId, PaymentStatus.SENT, null, null);

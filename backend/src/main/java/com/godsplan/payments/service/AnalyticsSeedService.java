@@ -126,9 +126,10 @@ public class AnalyticsSeedService {
             Instant created = now.minus(index % 120L, ChronoUnit.DAYS)
                     .minus((index * 7L) % 24L, ChronoUnit.HOURS)
                     .minus((index * 13L) % 60L, ChronoUnit.MINUTES);
-            jdbc.update("INSERT INTO payments (idempotency_key, amount, currency, source_account_id, destination_account_id, "
+            BigDecimal fee = amount.multiply(new BigDecimal("0.02")).setScale(2, RoundingMode.HALF_UP);
+            jdbc.update("INSERT INTO payments (idempotency_key, amount, fee, currency, source_account_id, destination_account_id, "
                             + "reference, status, error_code, error_description, payment_method, created_at, updated_at, version) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)", key, amount, account.currency,
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)", key, amount, fee, account.currency,
                     account.accountId, destinationId, "Analytics demonstration transaction", status,
                     errorCode, errorDescription, methods[index % methods.length], Timestamp.from(created), Timestamp.from(created));
             Long paymentId = jdbc.queryForObject("SELECT id FROM payments WHERE idempotency_key = ?", Long.class, key);

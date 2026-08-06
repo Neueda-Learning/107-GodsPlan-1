@@ -73,7 +73,7 @@ class PaymentApiIntegrationTest {
                 .andExpect(jsonPath("$.history", hasSize(4)))
                 .andExpect(jsonPath("$.history[0].toStatus").value("CREATED"))
                 .andExpect(jsonPath("$.history[3].toStatus").value("COMPLETED"));
-        assertEquals(0, new java.math.BigDecimal("874.50").compareTo(
+        assertEquals(0, new java.math.BigDecimal("871.99").compareTo(
                 jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
         assertEquals(0, new java.math.BigDecimal("625.50").compareTo(
                 jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 4", java.math.BigDecimal.class)));
@@ -256,7 +256,7 @@ class PaymentApiIntegrationTest {
 
             assertEquals(1, statuses.stream().filter(status -> status == 201).count());
             assertEquals(1, statuses.stream().filter(status -> status == 409).count());
-            assertEquals(0, new java.math.BigDecimal("300.00").compareTo(
+            assertEquals(0, new java.math.BigDecimal("286.00").compareTo(
                     jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
             assertEquals(0, new java.math.BigDecimal("1200.00").compareTo(
                     jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 4", java.math.BigDecimal.class)));
@@ -291,9 +291,9 @@ class PaymentApiIntegrationTest {
 
     private long analyticsPayment(String key, String amount, String currency, String status,
                                   String errorCode, String errorDescription, Instant created) {
-        jdbc.update("INSERT INTO payments (idempotency_key, amount, currency, source_account_id, destination_account_id, "
+        jdbc.update("INSERT INTO payments (idempotency_key, amount, fee, currency, source_account_id, destination_account_id, "
                         + "reference, status, error_code, error_description, payment_method, created_at, updated_at, version) "
-                        + "VALUES (?, ?, ?, 2, 1, 'Analytics test', ?, ?, ?, 'Credit card', ?, ?, 0)",
+                        + "VALUES (?, ?, 0.00, ?, 2, 1, 'Analytics test', ?, ?, ?, 'Credit card', ?, ?, 0)",
                 key, new java.math.BigDecimal(amount), currency, status, errorCode, errorDescription,
                 Timestamp.from(created), Timestamp.from(created));
         return jdbc.queryForObject("SELECT id FROM payments WHERE idempotency_key = ?", Long.class, key);

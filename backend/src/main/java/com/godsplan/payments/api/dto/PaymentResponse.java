@@ -9,6 +9,7 @@ public record PaymentResponse(
         Long id,
         PaymentStatus status,
         BigDecimal amount,
+        BigDecimal fee,
         String currency,
         Long sourceAccountId,
         Long destinationAccountId,
@@ -26,7 +27,7 @@ public record PaymentResponse(
         Instant createdAt,
         Instant updatedAt) {
     public static PaymentResponse from(Payment p) {
-        return new PaymentResponse(p.getId(), p.getStatus(), p.getAmount(), p.getCurrency(),
+        return new PaymentResponse(p.getId(), p.getStatus(), p.getAmount(), p.getFee(), p.getCurrency(),
                 p.getSourceAccount().getId(), p.getDestinationAccount().getId(),
                 p.getSourceAccount().getAccountNumber(), p.getDestinationAccount().getAccountNumber(), p.getReference(),
                 p.getIntermediaryBank(),

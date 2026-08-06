@@ -116,10 +116,12 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
   )
   const sourceAccount = sourceAccounts.find((account) => String(account.id) === form.sourceAccountId)
   const amountIsValid = /^\d+(\.\d{1,2})?$/.test(form.amount) && Number(form.amount) > 0
+  const feeAmount = amountIsValid ? Math.round(Number(form.amount) * 0.02 * 100) / 100 : 0
+  const totalDeducted = amountIsValid ? Number(form.amount) + feeAmount : 0
   const insufficient = amountIsValid && sourceAccountDetails
-    && Number(form.amount) > Number(sourceAccountDetails.availableBalance)
+    && totalDeducted > Number(sourceAccountDetails.availableBalance)
   const insufficientMessage = insufficient
-    ? `Insufficient funds. Your available balance is ${money(sourceAccountDetails.availableBalance, sourceAccountDetails.currency)} but you are attempting to transfer ${money(form.amount, sourceAccountDetails.currency)}.`
+    ? `Insufficient funds. Your available balance is ${money(sourceAccountDetails.availableBalance, sourceAccountDetails.currency)} but this transfer requires ${money(totalDeducted.toFixed(2), sourceAccountDetails.currency)} (amount + 2% fee).`
     : ''
 
   const change = (field) => (event) => {
@@ -209,9 +211,11 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     try {
       const latestAccount = await customerApi.account(form.senderCustomerId, form.sourceAccountId)
       setSourceAccountDetails(latestAccount)
-      if (Number(form.amount) > Number(latestAccount.availableBalance)) {
+      const latestFee = Math.round(Number(form.amount) * 0.02 * 100) / 100
+      const latestTotal = Number(form.amount) + latestFee
+      if (latestTotal > Number(latestAccount.availableBalance)) {
         setInsufficientPopup(true)
-        setErrors((current) => ({ ...current, amount: `Insufficient funds. Your available balance is ${money(latestAccount.availableBalance, latestAccount.currency)} but you are attempting to transfer ${money(form.amount, latestAccount.currency)}.` }))
+        setErrors((current) => ({ ...current, amount: `Insufficient funds. Your available balance is ${money(latestAccount.availableBalance, latestAccount.currency)} but this transfer requires ${money(latestTotal.toFixed(2), latestAccount.currency)} (amount + 2% fee).` }))
         return
       }
       const payment = await paymentApi.create({
@@ -312,6 +316,12 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                   aria-invalid={Boolean(errors.amount)}
                 />
                 <span className="mt-2 block text-xs text-ink-muted">Source currency: <strong className="text-ink">{sourceAccountDetails?.currency || sourceAccount?.currency || 'Select a sender account'}</strong></span>
+                {amountIsValid && (sourceAccountDetails?.currency || sourceAccount?.currency) && (
+                  <span className="mt-2 block text-xs text-ink-muted">
+                    Transaction fee (2%): <strong className="text-ink">{money(feeAmount.toFixed(2), sourceAccountDetails?.currency || sourceAccount?.currency)}</strong>
+                    {' '}— Total deducted: <strong className="text-ink">{money(totalDeducted.toFixed(2), sourceAccountDetails?.currency || sourceAccount?.currency)}</strong>
+                  </span>
+                )}
                 {(insufficientMessage || errors.amount) && <span className="mt-1.5 block text-sm font-semibold text-red-600" role="alert">{insufficientMessage || errors.amount}</span>}
               </label>
               <label className="block">
