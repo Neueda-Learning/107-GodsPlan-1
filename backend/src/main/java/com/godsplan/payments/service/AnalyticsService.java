@@ -25,12 +25,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AnalyticsService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
-    private static final String OUTCOME = "CASE WHEN COALESCE(r.refunded, 0) = 1 THEN 'REFUNDED' "
-            + "WHEN p.status = 'COMPLETED' THEN 'SUCCESSFUL' WHEN p.status = 'FAILED' THEN 'FAILED' ELSE 'PENDING' END";
+    private static final String SOURCE_PAYMENT = "PAYMENT";
+    private static final String SOURCE_INSUFFICIENT = "INSUFFICIENT_BALANCE";
+    private static final String OUTCOME = "CASE WHEN tx.source_type = '" + SOURCE_INSUFFICIENT + "' THEN 'FAILED' "
+        + "WHEN COALESCE(r.refunded, 0) = 1 THEN 'REFUNDED' "
+        + "WHEN tx.status = 'COMPLETED' THEN 'SUCCESSFUL' WHEN tx.status = 'FAILED' THEN 'FAILED' ELSE 'PENDING' END";
     private static final String REFUND_JOIN = " LEFT JOIN (SELECT payment_id, "
             + "SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END) AS refund_amount, "
             + "MAX(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS refunded "
-            + "FROM refunds GROUP BY payment_id) r ON r.payment_id = p.id ";
+        + "FROM refunds GROUP BY payment_id) r ON tx.source_type = '" + SOURCE_PAYMENT + "' AND r.payment_id = tx.id ";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AnalyticsProperties properties;
@@ -62,19 +65,18 @@ public class AnalyticsService {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), properties.maxPageSize());
         QueryParts parts = queryParts(filter);
-        String fromSql = " FROM payments p JOIN accounts a ON a.id = p.source_account_id "
-                + "JOIN customer_users c ON c.id = a.customer_id " + REFUND_JOIN;
+        String fromSql = auditFromSql(filter);
         Long total = jdbc.queryForObject("SELECT COUNT(*)" + fromSql + parts.where, parts.params, Long.class);
         parts.params.addValue("limit", safeSize).addValue("offset", safePage * safeSize);
-        String sql = "SELECT p.id, c.id AS customer_id, c.full_name, "
+        String sql = "SELECT tx.source_type, tx.id, c.id AS customer_id, c.full_name, "
                 + "(SELECT pc.last_four FROM payment_cards pc WHERE pc.customer_id = c.id AND pc.active = TRUE ORDER BY pc.id LIMIT 1) last_four, "
-                + "p.amount, p.currency, p.payment_method, " + OUTCOME + " outcome, p.created_at, p.error_description "
-                + fromSql + parts.where + " ORDER BY p.created_at DESC, p.id DESC LIMIT :limit OFFSET :offset";
+            + "tx.amount, tx.currency, tx.payment_method, " + OUTCOME + " outcome, tx.created_at, tx.error_description "
+            + fromSql + parts.where + " ORDER BY tx.created_at DESC, tx.id DESC LIMIT :limit OFFSET :offset";
         List<AnalyticsResponse.RecentTransaction> content = jdbc.query(sql, parts.params, (rs, rowNum) ->
-                new AnalyticsResponse.RecentTransaction(rs.getLong("id"), rs.getLong("customer_id"),
-                rs.getString("full_name"), rs.getString("last_four"), rs.getBigDecimal("amount"),
-                        rs.getString("currency"), rs.getString("payment_method"), rs.getString("outcome"),
-                        instant(rs, "created_at"), rs.getString("error_description")));
+            new AnalyticsResponse.RecentTransaction(rs.getString("source_type"), rs.getLong("id"),
+                rs.getLong("customer_id"), rs.getString("full_name"), rs.getString("last_four"),
+                rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("payment_method"),
+                rs.getString("outcome"), instant(rs, "created_at"), rs.getString("error_description")));
         long count = total == null ? 0 : total;
         int pages = count == 0 ? 0 : (int) Math.ceil((double) count / safeSize);
         return new PageResponse<>(content, safePage, safeSize, count, pages);
@@ -87,7 +89,7 @@ public class AnalyticsService {
         String quote = normalizeCurrency(target);
         if (base.equals(quote)) throw invalid("Source and target currencies must be different");
         AnalyticsFilter dates = AnalyticsFilter.create(requestedFrom, requestedTo, null, null, null,
-                null, null, null, properties.defaultBaseCurrency(), "DAILY", properties);
+            null, null, null, null, properties.defaultBaseCurrency(), "DAILY", properties);
         var params = new MapSqlParameterSource().addValue("base", base).addValue("quote", quote)
                 .addValue("from", Timestamp.from(dates.from())).addValue("to", Timestamp.from(dates.toExclusive()));
         List<AnalyticsResponse.ExchangeRatePoint> points = jdbc.query("SELECT fetched_at, rate, source "
@@ -109,21 +111,19 @@ public class AnalyticsService {
         Aggregate aggregate = new Aggregate(filter, grouping);
         QueryParts parts = queryParts(filter);
         enforceRowLimit(parts);
-        String rate = "(SELECT e.rate FROM exchange_rate_history e WHERE e.base_currency = p.currency "
-                + "AND e.quote_currency = :baseCurrency AND e.fetched_at <= p.created_at "
+        String rate = "(SELECT e.rate FROM exchange_rate_history e WHERE e.base_currency = tx.currency "
+            + "AND e.quote_currency = :baseCurrency AND e.fetched_at <= tx.created_at "
                 + "ORDER BY e.fetched_at DESC LIMIT 1)";
-        String conversion = "CASE WHEN p.currency = :baseCurrency THEN p.amount ELSE p.amount * " + rate + " END";
+        String conversion = "CASE WHEN tx.currency = :baseCurrency THEN tx.amount ELSE tx.amount * " + rate + " END";
         String refundConversion = "CASE WHEN COALESCE(r.refund_amount, 0) = 0 THEN 0 "
-                + "WHEN p.currency = :baseCurrency THEN r.refund_amount ELSE r.refund_amount * " + rate + " END";
-        String sql = "SELECT p.id, p.amount, p.currency, p.payment_method, p.error_code, p.error_description, "
-                + "p.created_at, c.id customer_id, c.full_name, c.role customer_role, "
+            + "WHEN tx.currency = :baseCurrency THEN r.refund_amount ELSE r.refund_amount * " + rate + " END";
+        String sql = "SELECT tx.id, tx.amount, tx.currency, tx.payment_method, tx.error_code, tx.error_description, "
+            + "tx.created_at, c.id customer_id, c.full_name, c.role customer_role, "
                 + "(SELECT pc.last_four FROM payment_cards pc WHERE pc.customer_id = c.id AND pc.active = TRUE ORDER BY pc.id LIMIT 1) last_four, "
                 + "(SELECT MIN(p2.created_at) FROM payments p2 JOIN accounts a2 ON a2.id = p2.source_account_id "
                 + "WHERE a2.customer_id = c.id) first_payment_at, " + OUTCOME + " outcome, "
                 + conversion + " normalized_amount, " + refundConversion + " refund_normalized_amount "
-                + "FROM payments p JOIN accounts a ON a.id = p.source_account_id "
-                + "JOIN customer_users c ON c.id = a.customer_id " + REFUND_JOIN + parts.where
-                + " ORDER BY p.created_at, p.id";
+            + auditFromSql(filter) + parts.where + " ORDER BY tx.created_at, tx.id";
         jdbc.query(sql, parts.params, (RowCallbackHandler) rs -> aggregate.accept(row(rs), detailed));
         return aggregate;
     }
@@ -133,17 +133,17 @@ public class AnalyticsService {
                 .addValue("from", Timestamp.from(filter.from()))
                 .addValue("to", Timestamp.from(filter.toExclusive()))
                 .addValue("baseCurrency", filter.baseCurrency());
-        StringBuilder where = new StringBuilder(" WHERE p.created_at >= :from AND p.created_at < :to");
+        StringBuilder where = new StringBuilder(" WHERE tx.created_at >= :from AND tx.created_at < :to");
         if (filter.status() != null) {
             where.append(" AND ").append(OUTCOME).append(" = :status");
             params.addValue("status", filter.status());
         }
         if (filter.currency() != null) {
-            where.append(" AND p.currency = :currency");
+            where.append(" AND tx.currency = :currency");
             params.addValue("currency", filter.currency());
         }
         if (filter.paymentMethod() != null) {
-            where.append(" AND p.payment_method = :paymentMethod");
+            where.append(" AND tx.payment_method = :paymentMethod");
             params.addValue("paymentMethod", filter.paymentMethod());
         }
         if (filter.customerId() != null) {
@@ -151,19 +151,34 @@ public class AnalyticsService {
             params.addValue("customerId", filter.customerId());
         }
         if (filter.minimumAmount() != null) {
-            where.append(" AND p.amount >= :minimumAmount");
+            where.append(" AND tx.amount >= :minimumAmount");
             params.addValue("minimumAmount", filter.minimumAmount());
         }
         if (filter.maximumAmount() != null) {
-            where.append(" AND p.amount <= :maximumAmount");
+            where.append(" AND tx.amount <= :maximumAmount");
             params.addValue("maximumAmount", filter.maximumAmount());
         }
-        return new QueryParts(where.toString(), params);
+        return new QueryParts(where.toString(), params, filter);
+    }
+
+    private String auditFromSql(AnalyticsFilter filter) {
+        String payments = "SELECT '" + SOURCE_PAYMENT + "' AS source_type, p.id, p.amount, p.currency, "
+                + "p.payment_method, p.status, p.error_code, p.error_description, p.created_at, "
+                + "p.source_account_id, p.destination_account_id FROM payments p";
+        String insufficient = "SELECT '" + SOURCE_INSUFFICIENT + "' AS source_type, i.id, i.amount, i.currency, "
+                + "i.payment_method, 'FAILED' AS status, i.error_code, i.error_description, i.created_at, "
+                + "i.source_account_id, i.destination_account_id FROM insufficient_balance_payments i";
+        String sourceSql = switch (filter.auditScope()) {
+            case PAYMENTS_ONLY -> payments;
+            case INSUFFICIENT_ONLY -> insufficient;
+            case ALL -> payments + " UNION ALL " + insufficient;
+        };
+        return " FROM (" + sourceSql + ") tx JOIN accounts a ON a.id = tx.source_account_id "
+                + "JOIN customer_users c ON c.id = a.customer_id " + REFUND_JOIN;
     }
 
     private void enforceRowLimit(QueryParts parts) {
-        String sql = "SELECT COUNT(*) FROM payments p JOIN accounts a ON a.id = p.source_account_id "
-                + "JOIN customer_users c ON c.id = a.customer_id " + REFUND_JOIN + parts.where;
+        String sql = "SELECT COUNT(*)" + auditFromSql(parts.filter()) + parts.where;
         Long rows = jdbc.queryForObject(sql, parts.params, Long.class);
         if (rows != null && rows > properties.maxQueryRows()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST,
@@ -209,15 +224,19 @@ public class AnalyticsService {
     }
 
     private AnalyticsResponse.FilterOptions filterOptions() {
-        List<String> currencies = jdbc.query("SELECT DISTINCT currency FROM payments ORDER BY currency",
+        List<String> currencies = jdbc.query("SELECT DISTINCT currency FROM ("
+                + "SELECT currency FROM payments UNION SELECT currency FROM insufficient_balance_payments"
+                + ") currencies ORDER BY currency",
                 (rs, rowNum) -> rs.getString(1));
-        List<String> methods = jdbc.query("SELECT DISTINCT payment_method FROM payments ORDER BY payment_method",
+        List<String> methods = jdbc.query("SELECT DISTINCT payment_method FROM ("
+                + "SELECT payment_method FROM payments UNION SELECT payment_method FROM insufficient_balance_payments"
+                + ") methods ORDER BY payment_method",
                 (rs, rowNum) -> rs.getString(1));
         List<AnalyticsResponse.CustomerOption> customers = jdbc.query("SELECT id, full_name FROM customer_users "
                 + "WHERE role = 'CUSTOMER' AND active = TRUE ORDER BY full_name",
                 (rs, rowNum) -> new AnalyticsResponse.CustomerOption(rs.getLong(1), rs.getString(2)));
         return new AnalyticsResponse.FilterOptions(List.of("SUCCESSFUL", "FAILED", "PENDING", "REFUNDED"),
-                currencies, methods, customers);
+            currencies, methods, customers, List.of("ALL", "PAYMENTS_ONLY", "INSUFFICIENT_ONLY"));
     }
 
     private List<AnalyticsResponse.Kpi> kpis(Aggregate current, Aggregate previous) {
@@ -347,7 +366,7 @@ public class AnalyticsService {
     }
 
     private enum Grouping { HOURLY, DAILY, WEEKLY, MONTHLY, YEARLY }
-    private record QueryParts(String where, MapSqlParameterSource params) {}
+    private record QueryParts(String where, MapSqlParameterSource params, AnalyticsFilter filter) {}
     private record PaymentRow(Long id, BigDecimal amount, BigDecimal normalizedAmount, BigDecimal refundAmount,
                               String currency, String method, String outcome, String errorCode, String errorDescription,
                               Instant createdAt, Long customerId, String customerName, String customerRole, String cardNumber,

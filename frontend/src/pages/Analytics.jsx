@@ -66,7 +66,7 @@ export default function Analytics() {
     setPair({ source, target: safeTarget })
   }
   const totalTransactions = Number(overview?.kpis?.find((item) => item.key === 'totalTransactions')?.value || 0)
-  const options = overview?.filterOptions || { statuses: [], currencies: [], paymentMethods: [], customers: [] }
+  const options = overview?.filterOptions || { statuses: [], currencies: [], paymentMethods: [], customers: [], auditScopes: ['ALL', 'PAYMENTS_ONLY', 'INSUFFICIENT_ONLY'] }
   const lastUpdated = overview?.generatedAt ? formatDate(overview.generatedAt) : '—'
 
   return <div className="mx-auto max-w-[1600px] space-y-6">

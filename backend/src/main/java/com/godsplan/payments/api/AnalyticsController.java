@@ -30,12 +30,13 @@ public class AnalyticsController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String currency,
             @RequestParam(required = false) String paymentMethod,
+            @RequestParam(required = false) String auditScope,
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) BigDecimal minimumAmount,
             @RequestParam(required = false) BigDecimal maximumAmount,
             @RequestParam(required = false) String baseCurrency,
             @RequestParam(required = false) String grouping) {
-        return analytics.overview(filter(from, to, status, currency, paymentMethod, customerId,
+        return analytics.overview(filter(from, to, status, currency, paymentMethod, auditScope, customerId,
                 minimumAmount, maximumAmount, baseCurrency, grouping));
     }
 
@@ -47,13 +48,14 @@ public class AnalyticsController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String currency,
             @RequestParam(required = false) String paymentMethod,
+            @RequestParam(required = false) String auditScope,
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) BigDecimal minimumAmount,
             @RequestParam(required = false) BigDecimal maximumAmount,
             @RequestParam(required = false) String baseCurrency,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return analytics.recent(filter(from, to, status, currency, paymentMethod, customerId,
+        return analytics.recent(filter(from, to, status, currency, paymentMethod, auditScope, customerId,
                 minimumAmount, maximumAmount, baseCurrency, "AUTO"), page, size);
     }
 
@@ -68,9 +70,9 @@ public class AnalyticsController {
     }
 
     private AnalyticsFilter filter(LocalDate from, LocalDate to, String status, String currency,
-                                   String paymentMethod, Long customerId, BigDecimal minimumAmount,
+                                   String paymentMethod, String auditScope, Long customerId, BigDecimal minimumAmount,
                                    BigDecimal maximumAmount, String baseCurrency, String grouping) {
-        return AnalyticsFilter.create(from, to, status, currency, paymentMethod, customerId,
+        return AnalyticsFilter.create(from, to, status, currency, paymentMethod, auditScope, customerId,
                 minimumAmount, maximumAmount, baseCurrency, grouping, properties);
     }
 }

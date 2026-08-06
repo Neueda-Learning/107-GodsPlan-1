@@ -8,5 +8,5 @@ export function defaultAnalyticsFilters() {
   const from = new Date(to)
   from.setDate(from.getDate() - 29)
   return { from: iso(from), to: iso(to), status: '', currency: '', paymentMethod: '', customerId: '',
-    minimumAmount: '', maximumAmount: '', baseCurrency: '', grouping: 'AUTO' }
+    minimumAmount: '', maximumAmount: '', baseCurrency: '', grouping: 'AUTO', auditScope: 'ALL' }
 }

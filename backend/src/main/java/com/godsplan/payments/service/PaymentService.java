@@ -11,6 +11,7 @@ import com.godsplan.payments.error.ApiException;
 import com.godsplan.payments.error.BusinessFailure;
 import com.godsplan.payments.error.ErrorCode;
 import com.godsplan.payments.repository.AccountRepository;
+import com.godsplan.payments.repository.InsufficientBalancePaymentRepository;
 import com.godsplan.payments.repository.PaymentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,10 +36,14 @@ public class PaymentService {
     private final InitialPaymentWriter initialWriter;
     private final LifecycleService lifecycle;
     private final SettlementService settlement;
+    private final InsufficientBalanceAuditService insufficientAudit;
+    private final InsufficientBalancePaymentRepository insufficientAudits;
 
     public PaymentService(PaymentRepository payments, AccountRepository accounts, ValidationService validation,
                           ExchangeRateService exchangeRates, InitialPaymentWriter initialWriter,
-                          LifecycleService lifecycle, SettlementService settlement) {
+                          LifecycleService lifecycle, SettlementService settlement,
+                          InsufficientBalanceAuditService insufficientAudit,
+                          InsufficientBalancePaymentRepository insufficientAudits) {
         this.payments = payments;
         this.accounts = accounts;
         this.validation = validation;
@@ -46,10 +51,15 @@ public class PaymentService {
         this.initialWriter = initialWriter;
         this.lifecycle = lifecycle;
         this.settlement = settlement;
+        this.insufficientAudit = insufficientAudit;
+        this.insufficientAudits = insufficientAudits;
     }
 
     public CreateResult create(String idempotencyKey, CreatePaymentRequest request) {
         validateKey(idempotencyKey);
+        if (insufficientAudits.findByIdempotencyKey(idempotencyKey).isPresent()) {
+            throw insufficientFunds();
+        }
         Optional<Payment> existing = payments.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) return resultOrInsufficient(existing.get(), false);
 
@@ -66,6 +76,7 @@ public class PaymentService {
                     "Source and destination accounts must be different");
         }
         if (request.amount().signum() > 0 && source.getAvailableBalance().compareTo(request.amount()) < 0) {
+            insufficientAudit.record(idempotencyKey, request, currency, source, destination);
             throw insufficientFunds();
         }
 
