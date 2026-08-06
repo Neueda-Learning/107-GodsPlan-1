@@ -223,10 +223,13 @@ class PaymentApiIntegrationTest {
 
     private long analyticsPayment(String key, String amount, String currency, String status,
                                   String errorCode, String errorDescription, Instant created) {
-        jdbc.update("INSERT INTO payments (idempotency_key, amount, currency, source_account_id, destination_account_id, "
+        java.math.BigDecimal testAmount = new java.math.BigDecimal(amount);
+        java.math.BigDecimal testFee = testAmount.multiply(new java.math.BigDecimal("0.02")).setScale(2, java.math.RoundingMode.HALF_EVEN);
+        java.math.BigDecimal testTotal = testAmount.add(testFee);
+        jdbc.update("INSERT INTO payments (idempotency_key, amount, fee_amount, total_debit_amount, currency, source_account_id, destination_account_id, "
                         + "reference, status, error_code, error_description, payment_method, created_at, updated_at, version) "
-                        + "VALUES (?, ?, ?, 2, 1, 'Analytics test', ?, ?, ?, 'Credit card', ?, ?, 0)",
-                key, new java.math.BigDecimal(amount), currency, status, errorCode, errorDescription,
+                        + "VALUES (?, ?, ?, ?, ?, 2, 1, 'Analytics test', ?, ?, ?, 'Credit card', ?, ?, 0)",
+                key, testAmount, testFee, testTotal, currency, status, errorCode, errorDescription,
                 Timestamp.from(created), Timestamp.from(created));
         return jdbc.queryForObject("SELECT id FROM payments WHERE idempotency_key = ?", Long.class, key);
     }
