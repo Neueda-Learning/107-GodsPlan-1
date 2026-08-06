@@ -12,6 +12,8 @@ public record PaymentResponse(
         String currency,
         Long sourceAccountId,
         Long destinationAccountId,
+    String sourceAccountNumber,
+    String destinationAccountNumber,
         String reference,
         String intermediaryBank,
         BigDecimal destinationAmount,
@@ -25,7 +27,8 @@ public record PaymentResponse(
         Instant updatedAt) {
     public static PaymentResponse from(Payment p) {
         return new PaymentResponse(p.getId(), p.getStatus(), p.getAmount(), p.getCurrency(),
-                p.getSourceAccount().getId(), p.getDestinationAccount().getId(), p.getReference(),
+                p.getSourceAccount().getId(), p.getDestinationAccount().getId(),
+                p.getSourceAccount().getAccountNumber(), p.getDestinationAccount().getAccountNumber(), p.getReference(),
                 p.getIntermediaryBank(),
                 p.getDestinationAmount(), p.getDestinationAmount() == null ? null : p.getDestinationAccount().getCurrency(),
                 p.getExchangeRate(), p.getExchangeRateSource(), p.getExchangeRateFetchedAt(),

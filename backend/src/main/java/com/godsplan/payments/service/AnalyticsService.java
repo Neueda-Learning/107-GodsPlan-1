@@ -72,7 +72,7 @@ public class AnalyticsService {
                 + fromSql + parts.where + " ORDER BY p.created_at DESC, p.id DESC LIMIT :limit OFFSET :offset";
         List<AnalyticsResponse.RecentTransaction> content = jdbc.query(sql, parts.params, (rs, rowNum) ->
                 new AnalyticsResponse.RecentTransaction(rs.getLong("id"), rs.getLong("customer_id"),
-                        rs.getString("full_name"), mask(rs.getString("last_four")), rs.getBigDecimal("amount"),
+                rs.getString("full_name"), rs.getString("last_four"), rs.getBigDecimal("amount"),
                         rs.getString("currency"), rs.getString("payment_method"), rs.getString("outcome"),
                         instant(rs, "created_at"), rs.getString("error_description")));
         long count = total == null ? 0 : total;
@@ -176,7 +176,7 @@ public class AnalyticsService {
                 rs.getBigDecimal("refund_normalized_amount"), rs.getString("currency"),
                 rs.getString("payment_method"), rs.getString("outcome"), rs.getString("error_code"),
                 rs.getString("error_description"), instant(rs, "created_at"), rs.getLong("customer_id"),
-                rs.getString("full_name"), rs.getString("customer_role"), mask(rs.getString("last_four")),
+                rs.getString("full_name"), rs.getString("customer_role"), rs.getString("last_four"),
                 instant(rs, "first_payment_at"));
     }
 
@@ -294,7 +294,7 @@ public class AnalyticsService {
     private List<AnalyticsResponse.TopCustomer> topCustomers(Aggregate a) {
         return a.customers.values().stream().sorted(Comparator.comparing((CustomerDimension c) -> c.successVolume).reversed()
                         .thenComparing(Comparator.comparingLong((CustomerDimension c) -> c.total).reversed())).limit(10)
-                .map(c -> new AnalyticsResponse.TopCustomer(c.id, c.name, c.maskedCard, c.total,
+            .map(c -> new AnalyticsResponse.TopCustomer(c.id, c.name, c.cardNumber, c.total,
                         scale(c.successVolume), average(c.amount, c.converted), rate(c.succeededAttempts(), c.completedAttempts())))
                 .toList();
     }
@@ -334,7 +334,6 @@ public class AnalyticsService {
 
     private static BigDecimal bd(long value) { return BigDecimal.valueOf(value); }
     private static BigDecimal scale(BigDecimal value) { return value == null ? BigDecimal.ZERO : value.setScale(2, RoundingMode.HALF_UP); }
-    private static String mask(String lastFour) { return lastFour == null ? null : "XXXX XXXX XXXX " + lastFour; }
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         Timestamp value = rs.getTimestamp(column);
         return value == null ? null : value.toInstant();
@@ -351,7 +350,7 @@ public class AnalyticsService {
     private record QueryParts(String where, MapSqlParameterSource params) {}
     private record PaymentRow(Long id, BigDecimal amount, BigDecimal normalizedAmount, BigDecimal refundAmount,
                               String currency, String method, String outcome, String errorCode, String errorDescription,
-                              Instant createdAt, Long customerId, String customerName, String customerRole, String maskedCard,
+                              Instant createdAt, Long customerId, String customerName, String customerRole, String cardNumber,
                               Instant firstPaymentAt) {}
     private record CustomerCreated(Long id, Instant createdAt) {}
 
@@ -376,9 +375,9 @@ public class AnalyticsService {
     private static final class CustomerDimension extends Dimension {
         final long id;
         final String name;
-        final String maskedCard;
+        final String cardNumber;
         BigDecimal successVolume = BigDecimal.ZERO;
-        CustomerDimension(long id, String name, String maskedCard) { this.id = id; this.name = name; this.maskedCard = maskedCard; }
+        CustomerDimension(long id, String name, String cardNumber) { this.id = id; this.name = name; this.cardNumber = cardNumber; }
         @Override void accept(PaymentRow row) {
             super.accept(row);
             if ("SUCCESSFUL".equals(row.outcome) && row.normalizedAmount != null) successVolume = successVolume.add(row.normalizedAmount);
@@ -459,7 +458,7 @@ public class AnalyticsService {
             methods.computeIfAbsent(row.method, ignored -> new Dimension()).accept(row);
             currencies.computeIfAbsent(row.currency, ignored -> new Dimension()).accept(row);
             if ("CUSTOMER".equals(row.customerRole)) {
-                customers.computeIfAbsent(row.customerId, ignored -> new CustomerDimension(row.customerId, row.customerName, row.maskedCard)).accept(row);
+                customers.computeIfAbsent(row.customerId, ignored -> new CustomerDimension(row.customerId, row.customerName, row.cardNumber)).accept(row);
             }
             ZonedDateTime local = row.createdAt.atZone(filter.zoneId());
             heatmap.merge(local.getDayOfWeek().getValue() + ":" + local.getHour(), 1L, Long::sum);

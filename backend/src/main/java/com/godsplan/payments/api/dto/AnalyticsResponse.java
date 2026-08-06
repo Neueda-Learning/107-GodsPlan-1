@@ -49,7 +49,7 @@ public final class AnalyticsResponse {
     public record CustomerGrowthPoint(String period, long newCustomers, long cumulativeCustomers,
                                       long activeCustomers, long returningCustomers) {}
 
-    public record TopCustomer(Long customerId, String customerName, String maskedCardNumber,
+        public record TopCustomer(Long customerId, String customerName, String cardNumber,
                               long transactionCount, BigDecimal successfulVolume,
                               BigDecimal averageTransactionValue, BigDecimal successRate) {}
 
@@ -77,7 +77,7 @@ public final class AnalyticsResponse {
             Long transactionId,
             Long customerId,
             String customerName,
-            String maskedCardNumber,
+            String cardNumber,
             BigDecimal amount,
             String currency,
             String paymentMethod,

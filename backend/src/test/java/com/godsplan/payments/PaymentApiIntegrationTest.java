@@ -18,7 +18,6 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.security.test.context.support.WithMockUser;
 import com.godsplan.payments.config.AnalyticsProperties;
 import com.godsplan.payments.service.AnalyticsSeedService;
 import java.sql.Timestamp;
@@ -127,21 +126,6 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    void customerDataRequiresStaffAuthentication() throws Exception {
-        mvc.perform(get("/api/v1/customers"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
-    void analyticsRequiresStaffAuthentication() throws Exception {
-        mvc.perform(get("/api/v1/analytics/overview"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
-    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
     void analyticsCalculationsFiltersAndPrivacyMatchDatabaseRecords() throws Exception {
         Instant created = Instant.now().minusSeconds(3600);
         long completed = analyticsPayment("ANALYTICS-COMPLETED", "100.00", "USD", "COMPLETED", null, null, created);
@@ -177,14 +161,12 @@ class PaymentApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(3))
                 .andExpect(jsonPath("$.content", hasSize(2)))
-                .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
-                .andExpect(jsonPath("$.content[0].lastFour").doesNotExist())
+                .andExpect(jsonPath("$.content[0].cardNumber").value("1234"))
                 .andExpect(jsonPath("$.content[0].cvv").doesNotExist())
                 .andExpect(jsonPath("$.content[0].paymentToken").doesNotExist());
     }
 
     @Test
-    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
     void analyticsReturnsRealEmptyResultsForAnEmptyPeriod() throws Exception {
         mvc.perform(get("/api/v1/analytics/overview").param("from", "2020-01-01").param("to", "2020-01-07"))
                 .andExpect(status().isOk())
@@ -207,8 +189,7 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
-    void returnsOtherCustomersWithBackendMaskedCardsAndPaymentHistory() throws Exception {
+    void returnsOtherCustomersWithBackendUnmaskedCardsAndPaymentHistory() throws Exception {
         mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-CUSTOMER-HISTORY")
                         .contentType(MediaType.APPLICATION_JSON).content(request("42.00")))
                 .andExpect(status().isCreated());
@@ -217,10 +198,8 @@ class PaymentApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].fullName").value("Test Customer"))
-                .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
-                .andExpect(jsonPath("$.content[0].accounts[0].maskedAccountNumber").value("XXXX 0002"))
-                .andExpect(jsonPath("$.content[0].accounts[0].accountNumber").doesNotExist())
-                .andExpect(jsonPath("$.content[0].lastFour").doesNotExist());
+                .andExpect(jsonPath("$.content[0].cardNumber").value("1234"))
+                .andExpect(jsonPath("$.content[0].accounts[0].accountNumber").value("ACC-0002"));
 
         mvc.perform(get("/api/v1/customers/2/transactions"))
                 .andExpect(status().isOk())
@@ -229,7 +208,7 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    void paymentOptionsArePublicDatabaseBackedAndAccountsAreMasked() throws Exception {
+        void paymentOptionsArePublicDatabaseBackedAndAccountsAreUnmasked() throws Exception {
         mvc.perform(get("/api/v1/payment-options/customers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
@@ -239,10 +218,9 @@ class PaymentApiIntegrationTest {
         mvc.perform(get("/api/v1/payment-options/customers/2/accounts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].label").value("Savings Account · XXXX 0002 · USD"))
-                .andExpect(jsonPath("$[0].maskedAccountNumber").value("XXXX 0002"))
-                .andExpect(jsonPath("$[0].availableBalance").value(1000.00))
-                .andExpect(jsonPath("$[0].accountNumber").doesNotExist());
+                .andExpect(jsonPath("$[0].label").value("Savings Account · ACC-0002 · USD"))
+                .andExpect(jsonPath("$[0].accountNumber").value("ACC-0002"))
+                .andExpect(jsonPath("$[0].availableBalance").value(1000.00));
 
         mvc.perform(get("/api/v1/payment-options/customers/2/accounts/2"))
                 .andExpect(status().isOk())

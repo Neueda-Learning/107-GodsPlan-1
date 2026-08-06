@@ -22,23 +22,6 @@ export const paymentApi = {
   }).then(({ data }) => data),
 }
 
-async function csrfHeaders() {
-  const { data } = await client.get('/auth/csrf')
-  return { [data.headerName]: data.token }
-}
-
-export const authApi = {
-  me: () => client.get('/auth/me').then(({ data }) => data),
-  login: async (email, password) => {
-    const headers = await csrfHeaders()
-    const body = new URLSearchParams({ username: email, password })
-    return client.post('/auth/login', body, {
-      headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
-    }).then(({ data }) => data)
-  },
-  logout: async () => client.post('/auth/logout', null, { headers: await csrfHeaders() }),
-}
-
 export const customerApi = {
   list: (params = {}) => client.get('/customers', { params }).then(({ data }) => data),
   paymentOptions: () => client.get('/payment-options/customers').then(({ data }) => data),
