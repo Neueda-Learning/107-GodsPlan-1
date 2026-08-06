@@ -16,7 +16,7 @@ A complete training-grade payments application built from the repository require
 - Protected, database-driven Analytics workspace with backend aggregation, filters, KPI trends, interactive charts, stored FX history, refunds, heatmaps, and paginated transactions
 - Responsive desktop/tablet/mobile layouts, skeletons, toasts, empty states, accessible controls, and inline validation
 - Database-backed create-payment modal with customer selectors, dependent masked-account selectors, and backend ownership validation
-- Public payment creation and public-safe dropdown APIs; only Customers and Analytics require staff authentication
+- Public payment creation, customer, and Analytics APIs
 - Live database balances with insufficient-funds checks and transactional, concurrency-safe debit/credit settlement
 - Docker-based local environment and automated backend/frontend tests
 
@@ -42,9 +42,7 @@ MySQL is available on `localhost:3306`. The default development credentials in `
 
 The application uses an nginx reverse proxy to serve both frontend and backend through a single port. The nginx port can be configured via the `NGINX_PORT` environment variable in `.env` (defaults to 8081). This is useful when deploying to environments with specific port requirements like EC2 instances.
 
-This is a single-user local system: none of the API endpoints require authentication, and no account details are masked in responses.
-
-The modal uses the public `/api/v1/payment-options/**` endpoints to retrieve active customers, accounts, currencies, and current balances. `/api/v1/customers/**` and `/api/v1/analytics/**` are likewise open, with no login required.
+The modal uses the public `/api/v1/payment-options/**` endpoints to retrieve active customers, accounts, currencies, and current balances. `/api/v1/analytics/**` is also open without a login.
 
 CVVs and payment tokens are never returned by the API or stored by the customer-card migration.
 
@@ -60,7 +58,7 @@ The command inserts deterministic demonstration records directly into the existi
 
 `APP_ENVIRONMENT` must be one of `development`, `dev`, `local`, `test`, `staging`, or `demo`. The command fails before writing anything when the environment is `production` or unspecified. Seeding is never performed during normal application startup.
 
-Analytics APIs are available under `/api/v1/analytics` and require an authenticated `ADMIN` or `STAFF` session. Aggregations and all filters execute on the backend; recent transactions are database-paginated and card values are masked before serialization.
+Analytics APIs are available under `/api/v1/analytics` without authentication. Aggregations and all filters execute on the backend; recent transactions are database-paginated and card values are masked before serialization.
 
 To stop the local stack without deleting its database volume:
 
@@ -215,4 +213,4 @@ prompt_files/, requirements/, analysis/  source specifications
 compose.yaml  MySQL + API + web orchestration
 ```
 
-Payment creation and its public-safe customer/account option APIs are intentionally unauthenticated. The privacy-sensitive Customer Details and Analytics workspaces retain isolated staff authentication and role checks. No real payment gateway is included; only the exchange-rate lookup is external, while account balance settlement is performed inside the local database.
+Payment creation, customer/account options, and Analytics are intentionally unauthenticated in this local application. No real payment gateway is included; only the exchange-rate lookup is external, while account balance settlement is performed inside the local database.

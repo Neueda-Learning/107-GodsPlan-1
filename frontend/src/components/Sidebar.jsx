@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Building2, ChevronLeft, ChevronRight, CreditCard, LayoutDashboard, Landmark, UserRoundCheck, X } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronLeft, ChevronRight, CreditCard, LayoutDashboard, Landmark, UserRoundCheck, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const links = [
@@ -7,6 +7,7 @@ const links = [
   { to: '/customers', label: 'Beneficiaries', icon: UserRoundCheck },
   { to: '/accounts', label: 'Accounts', icon: Landmark },
   { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
 const initials = (name) => name?.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'GP'
