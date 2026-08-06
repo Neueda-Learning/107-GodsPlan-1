@@ -78,6 +78,7 @@ public class PaymentService {
         if (request.amount().signum() > 0) {
             BigDecimal fee = request.amount().multiply(new BigDecimal("0.02")).setScale(2, RoundingMode.HALF_UP);
             if (source.getAvailableBalance().compareTo(request.amount().add(fee)) < 0) {
+                insufficientAudit.record(idempotencyKey, request, currency, source, destination);
                 throw insufficientFunds();
             }
         }

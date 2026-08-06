@@ -4,6 +4,11 @@ import { apiMessage, customerApi, paymentApi } from '../api/client'
 import { useToast } from '../hooks/useToast'
 import { generateId } from '../utils/generateId'
 
+const money = (amount, currency) => `${currency} ${new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(Number(amount || 0))}`
+
 const empty = {
   senderCustomerId: '',
   sourceAccountId: '',
@@ -85,10 +90,10 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
   const amountIsValid = /^\d+(\.\d{1,2})?$/.test(form.amount) && Number(form.amount) > 0
   const feeAmount = amountIsValid ? Math.round(Number(form.amount) * 0.02 * 100) / 100 : 0
   const totalDeducted = amountIsValid ? Number(form.amount) + feeAmount : 0
-  const insufficient = amountIsValid && sourceAccountDetails
-    && totalDeducted > Number(sourceAccountDetails.availableBalance)
+  const insufficient = amountIsValid && sourceAccount
+    && totalDeducted > Number(sourceAccount.availableBalance)
   const insufficientMessage = insufficient
-    ? `Insufficient funds. Your available balance is ${money(sourceAccountDetails.availableBalance, sourceAccountDetails.currency)} but this transfer requires ${money(totalDeducted.toFixed(2), sourceAccountDetails.currency)} (amount + 2% fee).`
+    ? `Insufficient funds. Your available balance is ${money(sourceAccount.availableBalance, sourceAccount.currency)} but this transfer requires ${money(totalDeducted.toFixed(2), sourceAccount.currency)} (amount + 2% fee).`
     : ''
 
   const change = (field) => (event) => {
@@ -164,7 +169,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     setErrors((current) => ({ ...current, form: '' }))
     try {
       const latestAccount = await customerApi.account(form.senderCustomerId, form.sourceAccountId)
-      setSourceAccountDetails(latestAccount)
       const latestFee = Math.round(Number(form.amount) * 0.02 * 100) / 100
       const latestTotal = Number(form.amount) + latestFee
       if (latestTotal > Number(latestAccount.availableBalance)) {
@@ -268,11 +272,11 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                   aria-label="Amount"
                   aria-invalid={Boolean(errors.amount)}
                 />
-                <span className="mt-2 block text-xs text-ink-muted">Source currency: <strong className="text-ink">{sourceAccountDetails?.currency || sourceAccount?.currency || 'Select a sender account'}</strong></span>
-                {amountIsValid && (sourceAccountDetails?.currency || sourceAccount?.currency) && (
+                <span className="mt-2 block text-xs text-ink-muted">Source currency: <strong className="text-ink">{sourceAccount?.currency || 'Select a sender account'}</strong></span>
+                {amountIsValid && sourceAccount?.currency && (
                   <span className="mt-2 block text-xs text-ink-muted">
-                    Transaction fee (2%): <strong className="text-ink">{money(feeAmount.toFixed(2), sourceAccountDetails?.currency || sourceAccount?.currency)}</strong>
-                    {' '}— Total deducted: <strong className="text-ink">{money(totalDeducted.toFixed(2), sourceAccountDetails?.currency || sourceAccount?.currency)}</strong>
+                    Transaction fee (2%): <strong className="text-ink">{money(feeAmount.toFixed(2), sourceAccount.currency)}</strong>
+                    {' '}— Total deducted: <strong className="text-ink">{money(totalDeducted.toFixed(2), sourceAccount.currency)}</strong>
                   </span>
                 )}
                 {(insufficientMessage || errors.amount) && <span className="mt-1.5 block text-sm font-semibold text-red-600" role="alert">{insufficientMessage || errors.amount}</span>}
