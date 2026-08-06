@@ -18,6 +18,7 @@ public record AnalyticsFilter(
         String status,
         String currency,
         String paymentMethod,
+        AuditScope auditScope,
         Long customerId,
         BigDecimal minimumAmount,
         BigDecimal maximumAmount,
@@ -28,9 +29,10 @@ public record AnalyticsFilter(
     private static final Set<String> STATUSES = Set.of("SUCCESSFUL", "FAILED", "PENDING", "REFUNDED");
 
     public enum Grouping { AUTO, HOURLY, DAILY, WEEKLY, MONTHLY, YEARLY }
+    public enum AuditScope { ALL, PAYMENTS_ONLY, INSUFFICIENT_ONLY }
 
     public static AnalyticsFilter create(LocalDate requestedFrom, LocalDate requestedTo, String status,
-                                         String currency, String paymentMethod, Long customerId,
+                                         String currency, String paymentMethod, String auditScope, Long customerId,
                                          BigDecimal minimumAmount, BigDecimal maximumAmount,
                                          String baseCurrency, String grouping,
                                          AnalyticsProperties properties) {
@@ -56,6 +58,13 @@ public record AnalyticsFilter(
         String normalizedCurrency = currency == null || currency.isBlank() ? null : normalizeCurrency(currency, "currency");
         String normalizedBase = normalizeCurrency(baseCurrency == null ? properties.defaultBaseCurrency() : baseCurrency,
                 "base currency");
+        AuditScope normalizedAuditScope;
+        try {
+            normalizedAuditScope = auditScope == null || auditScope.isBlank()
+                    ? AuditScope.ALL : AuditScope.valueOf(auditScope.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw invalid("Unsupported audit scope");
+        }
         Grouping normalizedGrouping;
         try {
             normalizedGrouping = grouping == null || grouping.isBlank()
@@ -65,7 +74,7 @@ public record AnalyticsFilter(
         }
         return new AnalyticsFilter(from, to, from.atStartOfDay(zone).toInstant(),
                 to.plusDays(1).atStartOfDay(zone).toInstant(), normalizedStatus, normalizedCurrency,
-                blankToNull(paymentMethod), customerId, minimumAmount, maximumAmount,
+                blankToNull(paymentMethod), normalizedAuditScope, customerId, minimumAmount, maximumAmount,
                 normalizedBase, normalizedGrouping, zone);
     }
 
@@ -75,7 +84,7 @@ public record AnalyticsFilter(
         LocalDate previousFrom = previousTo.minusDays(days - 1);
         return new AnalyticsFilter(previousFrom, previousTo, previousFrom.atStartOfDay(zoneId).toInstant(),
                 previousTo.plusDays(1).atStartOfDay(zoneId).toInstant(), status, currency, paymentMethod,
-                customerId, minimumAmount, maximumAmount, baseCurrency, grouping, zoneId);
+            auditScope, customerId, minimumAmount, maximumAmount, baseCurrency, grouping, zoneId);
     }
 
     public long days() {
