@@ -6,6 +6,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Payments = lazy(() => import('./pages/Payments'))
 const PaymentDetails = lazy(() => import('./pages/PaymentDetails'))
 const CustomerDetails = lazy(() => import('./pages/CustomerDetails'))
+const Accounts = lazy(() => import('./pages/Accounts'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 
 export default function App() {
@@ -16,6 +17,8 @@ export default function App() {
         <Route path="payments" element={<Payments />} />
         <Route path="payments/:id" element={<PaymentDetails />} />
         <Route path="customers" element={<CustomerDetails />} />
+        <Route path="accounts" element={<Accounts />} />
+        <Route path="transactions" element={<Payments mode="transactions" />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

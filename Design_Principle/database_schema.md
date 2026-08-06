@@ -1,0 +1,241 @@
+# Database Schema — Payments Processing System
+
+## Overview
+
+**Database:** MySQL 8
+**Migration Tool:** Flyway
+
+Migration files:
+
+* `V1__init.sql`
+* `V2__add_reference.sql`
+* ...
+
+> **Rule:** The AI never edits an already applied migration. It always creates a new migration file.
+
+---
+
+# Tables
+
+## accounts
+
+| Column         | Type        | Constraints                         | Description           |
+| -------------- | ----------- | ----------------------------------- | --------------------- |
+| id             | BIGINT      | AUTO_INCREMENT, PRIMARY KEY         | Account identifier    |
+| account_number | VARCHAR(34) | NOT NULL, UNIQUE                    | Unique account number |
+| currency       | CHAR(3)     | NOT NULL                            | Account currency      |
+| active         | BOOLEAN     | NOT NULL, DEFAULT TRUE              | Account status        |
+| created_at     | TIMESTAMP   | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation timestamp    |
+
+---
+
+## payments
+
+| Column                   | Type          | Constraints                         | Description                                            |
+| ------------------------ | ------------- | ----------------------------------- | ------------------------------------------------------ |
+| id                       | BIGINT        | AUTO_INCREMENT, PRIMARY KEY         | Payment identifier                                     |
+| idempotency_key          | VARCHAR(80)   | NOT NULL, UNIQUE                    | Prevents duplicate payments                            |
+| amount                   | DECIMAL(15,2) | NOT NULL                            | Payment amount                                         |
+| currency                 | CHAR(3)       | NOT NULL                            | Payment currency                                       |
+| source_account_id        | BIGINT        | NOT NULL, FK → accounts(id)         | Sender account                                         |
+| destination_account_id   | BIGINT        | NOT NULL, FK → accounts(id)         | Receiver account                                       |
+| reference                | VARCHAR(200)  | NULL                                | Payment reference                                      |
+| status                   | VARCHAR(20)   | NOT NULL                            | Current payment status                                 |
+| error_code               | VARCHAR(40)   | NULL                                | Failure error code                                     |
+| error_description        | VARCHAR(300)  | NULL                                | Failure description                                    |
+| destination_amount       | DECIMAL(15,2) | NULL                                | Set only when currencies differ                        |
+| exchange_rate            | DECIMAL(18,8) | NULL                                | Exchange rate used for currency conversion             |
+| exchange_rate_source     | VARCHAR(60)   | NULL                                | Source of the exchange rate (e.g. `exchangerate.host`) |
+| exchange_rate_fetched_at | TIMESTAMP     | NULL                                | Time the exchange rate was fetched from the provider   |
+| created_at               | TIMESTAMP     | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Creation time                                          |
+| updated_at               | TIMESTAMP     | NOT NULL, AUTO UPDATE               | Last update time                                       |
+
+
+### Payment Status Values
+
+```
+CREATED
+VALIDATED
+SENT
+COMPLETED
+FAILED
+```
+
+---
+
+## payment_status_history
+
+| Column            | Type         | Constraints                         | Description                                |
+| ----------------- | ------------ | ----------------------------------- | ------------------------------------------ |
+| id                | BIGINT       | AUTO_INCREMENT, PRIMARY KEY         | History identifier                         |
+| payment_id        | BIGINT       | NOT NULL, FK → payments(id)         | Payment reference                          |
+| from_status       | VARCHAR(20)  | NULL                                | Previous status (`NULL` for initial entry) |
+| to_status         | VARCHAR(20)  | NOT NULL                            | New status                                 |
+| error_code        | VARCHAR(40)  | NULL                                | Error code at transition                   |
+| error_description | VARCHAR(300) | NULL                                | Error details                              |
+| created_at        | TIMESTAMP    | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Transition timestamp                       |
+
+---
+
+# Indexes
+
+```sql
+idx_payments_status
+    ON payments(status);
+
+idx_payments_created_at
+    ON payments(created_at DESC);
+
+idx_payments_idempotency_key
+    ON payments(idempotency_key);
+
+idx_history_payment_id
+    ON payment_status_history(payment_id, created_at);
+
+idx_accounts_number
+    ON accounts(account_number);
+```
+
+---
+
+# Constraints
+
+## Payments Constraints
+
+```sql
+
+CHECK (
+    status IN (
+        'CREATED',
+        'VALIDATED',
+        'SENT',
+        'COMPLETED',
+        'FAILED'
+    )
+);
+
+CHECK (source_account_id <> destination_account_id);
+```
+
+---
+
+## Unique Constraints
+
+```sql
+UNIQUE (idempotency_key);
+```
+
+Ensures duplicate payment requests are prevented at the database layer.
+
+---
+
+## Foreign Keys
+
+```sql
+FOREIGN KEY (source_account_id)
+    REFERENCES accounts(id);
+
+FOREIGN KEY (destination_account_id)
+    REFERENCES accounts(id);
+
+FOREIGN KEY (payment_id)
+    REFERENCES payments(id);
+```
+
+---
+
+# Design Notes
+
+## Payment Status Handling
+
+`payments.status` acts as the **current-state cache**.
+
+`payment_status_history` acts as the **append-only source of truth**.
+
+Every status update must happen in the same database transaction:
+
+1. Update `payments.status`
+2. Insert corresponding `payment_status_history` record
+
+This is a hard requirement:
+
+```
+NFR-D-02
+```
+
+---
+
+## Error Handling Design
+
+Error information exists in both tables.
+
+### payments
+
+Stores the current failure reason.
+
+Example:
+
+```
+FAILED
+INSUFFICIENT_FUNDS
+Account balance too low
+```
+
+### payment_status_history
+
+Stores the error information at the exact transition time.
+
+This allows auditing of previous failures and state changes.
+
+---
+
+## Idempotency Design
+
+Every payment requires:
+
+```
+idempotency_key NOT NULL
+```
+
+Reasons:
+
+* Prevent duplicate payments
+* Detect retries
+* Maintain transaction safety
+
+Database enforcement:
+
+```sql
+UNIQUE(idempotency_key)
+```
+
+---
+
+## Data Retention
+
+No purge or retention job is required for version 1.
+
+Reason:
+
+* Payment records are not treated as temporary visitor data.
+* No deletion requirement exists in the current business requirements.
+
+---
+
+# Sample Seed Data
+
+## Accounts
+
+```sql
+INSERT INTO accounts
+(
+    account_number,
+    currency,
+    active
+)
+VALUES
+    ('ACC-0001', 'USD', TRUE),
+    ('ACC-0002', 'USD', TRUE),
+    ('ACC-0003', 'EUR', TRUE),
+    ('ACC-0004', 'INR', TRUE);
+```

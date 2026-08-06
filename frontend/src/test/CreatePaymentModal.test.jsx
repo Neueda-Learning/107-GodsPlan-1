@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   paymentOptions: vi.fn(),
   accounts: vi.fn(),
   account: vi.fn(),
+  quote: vi.fn(),
   create: vi.fn(),
   notify: vi.fn(),
 }))
@@ -14,6 +15,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../api/client', () => ({
   apiMessage: (error) => error.message,
   customerApi: { paymentOptions: api.paymentOptions, accounts: api.accounts, account: api.account },
+  exchangeRateApi: { quote: api.quote },
   paymentApi: { create: api.create },
 }))
 
@@ -30,6 +32,14 @@ describe('CreatePaymentModal', () => {
       ? [{ id: 12, label: 'Checking Account · XXXX 1234 · USD', currency: 'USD', availableBalance: 1000 }]
       : [{ id: 13, label: 'Savings Account · XXXX 5678 · EUR', currency: 'EUR', availableBalance: 500 }])
     api.account.mockResolvedValue({ id: 12, label: 'Checking Account · XXXX 1234 · USD', currency: 'USD', availableBalance: 1000 })
+    api.quote.mockImplementation(async ({ sourceCurrency, destinationCurrency, amount }) => ({
+      sourceCurrency,
+      destinationCurrency,
+      sourceAmount: Number(amount),
+      exchangeRate: destinationCurrency === sourceCurrency ? 1 : 0.92,
+      destinationAmount: Number(amount) * (destinationCurrency === sourceCurrency ? 1 : 0.92),
+      source: 'test-provider',
+    }))
     api.create.mockResolvedValue({ id: 44, status: 'COMPLETED' })
   })
 
