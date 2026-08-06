@@ -21,6 +21,10 @@ public class Payment {
     private String idempotencyKey;
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
+    @Column(name = "fee_amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal feeAmount;
+    @Column(name = "total_debit_amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal totalDebitAmount;
     @Column(nullable = false, length = 3, columnDefinition = "char(3)")
     private String currency;
     @ManyToOne(fetch = FetchType.EAGER, optional = false)

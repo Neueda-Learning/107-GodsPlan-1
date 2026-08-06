@@ -7,12 +7,16 @@ import com.godsplan.payments.domain.PaymentStatus;
 import com.godsplan.payments.domain.PaymentStatusHistory;
 import com.godsplan.payments.repository.PaymentHistoryRepository;
 import com.godsplan.payments.repository.PaymentRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class InitialPaymentWriter {
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.02");
+
     private final PaymentRepository payments;
     private final PaymentHistoryRepository history;
 
@@ -27,6 +31,9 @@ public class InitialPaymentWriter {
         Payment payment = new Payment();
         payment.setIdempotencyKey(key);
         payment.setAmount(request.amount());
+        BigDecimal fee = request.amount().multiply(FEE_RATE).setScale(2, RoundingMode.HALF_EVEN);
+        payment.setFeeAmount(fee);
+        payment.setTotalDebitAmount(request.amount().add(fee));
         payment.setCurrency(currency);
         payment.setSourceAccount(source);
         payment.setDestinationAccount(destination);
