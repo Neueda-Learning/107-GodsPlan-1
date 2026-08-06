@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import com.godsplan.payments.config.AnalyticsProperties;
@@ -41,6 +42,7 @@ class PaymentApiIntegrationTest {
     void seedAccounts() {
         jdbc.update("DELETE FROM refunds");
         jdbc.update("DELETE FROM exchange_rate_history");
+                jdbc.update("DELETE FROM insufficient_balance_payments");
         jdbc.update("DELETE FROM payment_cards");
         jdbc.update("DELETE FROM payment_status_history");
         jdbc.update("DELETE FROM payments");
@@ -240,6 +242,46 @@ class PaymentApiIntegrationTest {
                 jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
         assertEquals(0L, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM payments WHERE idempotency_key = 'IK-NO-FUNDS'", Long.class));
+        assertEquals(1L, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM insufficient_balance_payments WHERE idempotency_key = 'IK-NO-FUNDS'", Long.class));
+    }
+
+    @Test
+    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
+    void analyticsAuditScopeIncludesInsufficientAttemptsWithoutPollutingPayments() throws Exception {
+        Instant created = Instant.now().minusSeconds(3600);
+        analyticsPayment("ANALYTICS-COMPLETED-2", "100.00", "USD", "COMPLETED", null, null, created);
+        jdbc.update("INSERT INTO insufficient_balance_payments (idempotency_key, amount, currency, source_account_id, "
+                        + "destination_account_id, payment_method, reference, intermediary_bank, error_code, error_description, created_at) "
+                        + "VALUES ('ANL-INSF-1', 40.00, 'USD', 2, 4, 'Bank transfer', 'Insufficient test', "
+                        + "'Correspondent Bank', 'INSUFFICIENT_FUNDS', 'The selected account does not have sufficient funds to complete this transaction.', ?)",
+                Timestamp.from(created.plusSeconds(10)));
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+
+        mvc.perform(get("/api/v1/analytics/overview")
+                        .param("from", today.toString()).param("to", today.toString())
+                        .param("auditScope", "PAYMENTS_ONLY"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].value").value(1.00));
+
+        mvc.perform(get("/api/v1/analytics/overview")
+                        .param("from", today.toString()).param("to", today.toString())
+                        .param("auditScope", "INSUFFICIENT_ONLY"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].value").value(1.00))
+                .andExpect(jsonPath("$.kpis[2].value").value(1.00));
+
+        mvc.perform(get("/api/v1/analytics/recent-transactions")
+                        .param("from", today.toString()).param("to", today.toString())
+                        .param("auditScope", "INSUFFICIENT_ONLY")
+                        .param("page", "0").param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].transactionType").value("INSUFFICIENT_BALANCE"))
+                .andExpect(jsonPath("$.content[0].paymentStatus").value("FAILED"));
+
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM payments WHERE idempotency_key = 'ANL-INSF-1'", Long.class));
     }
 
     @Test

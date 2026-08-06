@@ -58,7 +58,8 @@ public final class AnalyticsResponse {
     public record FailureMetric(String code, String reason, long count) {}
 
     public record FilterOptions(List<String> statuses, List<String> currencies,
-                                List<String> paymentMethods, List<CustomerOption> customers) {}
+                                List<String> paymentMethods, List<CustomerOption> customers,
+                                List<String> auditScopes) {}
 
     public record CustomerOption(Long id, String name) {}
 
@@ -74,6 +75,7 @@ public final class AnalyticsResponse {
     public record ExchangeRatePoint(Instant fetchedAt, BigDecimal rate, String source) {}
 
     public record RecentTransaction(
+            String transactionType,
             Long transactionId,
             Long customerId,
             String customerName,

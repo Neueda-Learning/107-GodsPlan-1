@@ -14,11 +14,6 @@ const empty = {
   reference: '',
 }
 
-const money = (amount, currency) => `${currency} ${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-}).format(Number(amount || 0))}`
-
 export default function CreatePaymentModal({ onClose, onCreated }) {
   const [form, setForm] = useState(empty)
   const [customers, setCustomers] = useState([])
@@ -27,8 +22,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
   const [customersLoading, setCustomersLoading] = useState(true)
   const [sourceLoading, setSourceLoading] = useState(false)
   const [destinationLoading, setDestinationLoading] = useState(false)
-  const [sourceAccountDetails, setSourceAccountDetails] = useState(null)
-  const [balanceLoading, setBalanceLoading] = useState(false)
   const [insufficientPopup, setInsufficientPopup] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -75,32 +68,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
   }, [form.receiverCustomerId])
 
   useEffect(() => {
-    if (!form.senderCustomerId || !form.sourceAccountId) return undefined
-    let active = true
-    const timer = setTimeout(() => {
-      setBalanceLoading(true)
-      customerApi.account(form.senderCustomerId, form.sourceAccountId)
-        .then((data) => {
-          if (active) {
-            setSourceAccountDetails(data)
-            setErrors((current) => ({ ...current, balance: '' }))
-          }
-        })
-        .catch((error) => {
-          if (active) {
-            setSourceAccountDetails(null)
-            setErrors((current) => ({ ...current, balance: apiMessage(error) }))
-          }
-        })
-        .finally(() => { if (active) setBalanceLoading(false) })
-    }, form.amount ? 250 : 0)
-    return () => {
-      active = false
-      clearTimeout(timer)
-    }
-  }, [form.senderCustomerId, form.sourceAccountId, form.destinationAccountId, form.amount])
-
-  useEffect(() => {
     const close = (event) => event.key === 'Escape' && !submitting && onClose()
     document.addEventListener('keydown', close)
     document.body.style.overflow = 'hidden'
@@ -115,19 +82,13 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     [customers, form.senderCustomerId],
   )
   const sourceAccount = sourceAccounts.find((account) => String(account.id) === form.sourceAccountId)
-  const amountIsValid = /^\d+(\.\d{1,2})?$/.test(form.amount) && Number(form.amount) > 0
-  const insufficient = amountIsValid && sourceAccountDetails
-    && Number(form.amount) > Number(sourceAccountDetails.availableBalance)
-  const insufficientMessage = insufficient
-    ? `Insufficient funds. Your available balance is ${money(sourceAccountDetails.availableBalance, sourceAccountDetails.currency)} but you are attempting to transfer ${money(form.amount, sourceAccountDetails.currency)}.`
-    : ''
+  const amountValue = Number(form.amount)
+  const amountIsValid = /^\d+(\.\d{1,2})?$/.test(form.amount) && amountValue > 0 && amountValue < 1000000
 
   const change = (field) => (event) => {
     const value = event.target.value
     if (field === 'senderCustomerId') {
       setSourceAccounts([])
-      setSourceAccountDetails(null)
-      setBalanceLoading(false)
       setSourceLoading(Boolean(value))
       if (value === form.receiverCustomerId) {
         setDestinationAccounts([])
@@ -138,11 +99,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
       setDestinationAccounts([])
       setDestinationLoading(Boolean(value))
     }
-    if (field === 'sourceAccountId') {
-      setSourceAccountDetails(null)
-      setBalanceLoading(Boolean(value))
-    }
-    if (field === 'amount' && form.sourceAccountId) setBalanceLoading(true)
     setForm((current) => {
       if (field === 'senderCustomerId') {
         const receiverWasSender = value && value === current.receiverCustomerId
@@ -165,7 +121,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
       form: '',
       ...(field === 'senderCustomerId' ? { sourceAccounts: '' } : {}),
       ...(field === 'receiverCustomerId' ? { destinationAccounts: '' } : {}),
-      ...(field === 'sourceAccountId' || field === 'amount' ? { balance: '' } : {}),
     }))
   }
 
@@ -182,19 +137,15 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
       next.destinationAccountId = 'Source and destination accounts must be different.'
     }
     if (!amountIsValid) {
-      next.amount = 'Enter an amount greater than 0 with up to 2 decimals.'
+      next.amount = 'Enter an amount greater than 0, less than 1000000, with up to 2 decimals.'
     }
-    if (insufficient) next.amount = insufficientMessage
     if (form.intermediaryBank.length > 120) next.intermediaryBank = 'Use 120 characters or fewer.'
     if (form.reference.length > 200) next.reference = 'Use 200 characters or fewer.'
     if (!sourceAccount?.currency) next.sourceAccountId = next.sourceAccountId || 'Select a valid sender account.'
-    if (form.sourceAccountId && !sourceAccountDetails && !balanceLoading) {
-      next.sourceAccountId = errors.balance || 'Could not validate the latest account balance.'
-    }
     return next
   }
 
-  const valid = Object.keys(validationErrors()).length === 0 && Boolean(sourceAccountDetails) && !insufficient
+  const valid = Object.keys(validationErrors()).length === 0
 
   const submit = async (event) => {
     event.preventDefault()
@@ -204,14 +155,10 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
       return
     }
     setSubmitting(true)
-    setBalanceLoading(true)
     setErrors((current) => ({ ...current, form: '' }))
     try {
-      const latestAccount = await customerApi.account(form.senderCustomerId, form.sourceAccountId)
-      setSourceAccountDetails(latestAccount)
-      if (Number(form.amount) > Number(latestAccount.availableBalance)) {
-        setInsufficientPopup(true)
-        setErrors((current) => ({ ...current, amount: `Insufficient funds. Your available balance is ${money(latestAccount.availableBalance, latestAccount.currency)} but you are attempting to transfer ${money(form.amount, latestAccount.currency)}.` }))
+      if (!sourceAccount?.currency) {
+        setErrors((current) => ({ ...current, sourceAccountId: 'Select a valid sender account.' }))
         return
       }
       const payment = await paymentApi.create({
@@ -220,7 +167,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
         receiverCustomerId: Number(form.receiverCustomerId),
         destinationAccountId: Number(form.destinationAccountId),
         amount: Number(form.amount),
-        currency: latestAccount.currency,
+        currency: sourceAccount.currency,
         intermediaryBank: form.intermediaryBank.trim() || null,
         reference: form.reference.trim() || null,
       }, idempotencyKey)
@@ -234,7 +181,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
       setErrors((current) => ({ ...current, form: message }))
     } finally {
       setSubmitting(false)
-      setBalanceLoading(false)
     }
   }
 
@@ -311,8 +257,8 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                   aria-label="Amount"
                   aria-invalid={Boolean(errors.amount)}
                 />
-                <span className="mt-2 block text-xs text-ink-muted">Source currency: <strong className="text-ink">{sourceAccountDetails?.currency || sourceAccount?.currency || 'Select a sender account'}</strong></span>
-                {(insufficientMessage || errors.amount) && <span className="mt-1.5 block text-sm font-semibold text-red-600" role="alert">{insufficientMessage || errors.amount}</span>}
+                  <span className="mt-2 block text-xs text-ink-muted">Source currency: <strong className="text-ink">{sourceAccount?.currency || 'Select a sender account'}</strong></span>
+                  {errors.amount && <span className="mt-1.5 block text-sm font-semibold text-red-600" role="alert">{errors.amount}</span>}
               </label>
               <label className="block">
                 <span className="label">Intermediary bank <span className="font-normal text-ink-muted">(optional)</span></span>
@@ -331,11 +277,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                 placeholder: 'Select sender account',
                 emptyMessage: form.senderCustomerId ? 'This customer has no active accounts' : 'Select a sender first',
               })}
-              {form.sourceAccountId && <div className="-mt-3 rounded-lg bg-primary-light px-3 py-2 text-sm text-primary-hover" aria-live="polite">
-                {balanceLoading ? <span className="flex items-center gap-2"><Loader2 className="size-4 animate-spin" />Checking latest balance…</span>
-                  : sourceAccountDetails ? <span>Available Balance: <strong>{money(sourceAccountDetails.availableBalance, sourceAccountDetails.currency)}</strong></span>
-                    : <span className="text-red-700">{errors.balance || 'Balance unavailable'}</span>}
-              </div>}
               {errors.sourceAccounts && <p className="-mt-3 text-xs text-red-600">{errors.sourceAccounts}</p>}
               {selectField({
                 name: 'destinationAccountId',
@@ -357,7 +298,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
 
           <div className="mt-8 flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
             <button type="button" className="btn-secondary sm:min-w-28" onClick={onClose} disabled={submitting}>Cancel</button>
-            <button type="submit" className="btn-primary sm:min-w-40" disabled={!valid || submitting || customersLoading || sourceLoading || destinationLoading || balanceLoading}>
+            <button type="submit" className="btn-primary sm:min-w-40" disabled={!valid || submitting || customersLoading || sourceLoading || destinationLoading}>
               {submitting && <Loader2 className="size-4 animate-spin" />}
               {submitting ? 'Processing…' : 'Confirm transfer'}
             </button>
