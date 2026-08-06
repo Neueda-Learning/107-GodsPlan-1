@@ -284,7 +284,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                 label: 'Sender',
                 loading: customersLoading,
                 disabled: customers.length === 0,
-                options: customers.map((customer) => ({ ...customer, label: `${customer.fullName} · ${customer.country}` })),
+                options: customers.map((customer) => ({ ...customer, label: customer.fullName })),
                 placeholder: 'Select sender',
                 emptyMessage: 'No customers available',
               })}
@@ -293,7 +293,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                 label: 'Receiver',
                 loading: customersLoading,
                 disabled: !form.senderCustomerId || receiverCustomers.length === 0,
-                options: receiverCustomers.map((customer) => ({ ...customer, label: `${customer.fullName} · ${customer.country}` })),
+                options: receiverCustomers.map((customer) => ({ ...customer, label: customer.fullName })),
                 placeholder: 'Select receiver',
                 emptyMessage: form.senderCustomerId ? 'No other customers available' : 'Select a sender first',
               })}
