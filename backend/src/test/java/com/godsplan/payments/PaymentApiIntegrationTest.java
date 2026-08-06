@@ -18,7 +18,6 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.security.test.context.support.WithMockUser;
 import com.godsplan.payments.config.AnalyticsProperties;
 import com.godsplan.payments.service.AnalyticsSeedService;
 import java.sql.Timestamp;
@@ -127,21 +126,6 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    void customerDataRequiresStaffAuthentication() throws Exception {
-        mvc.perform(get("/api/v1/customers"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
-    void analyticsRequiresStaffAuthentication() throws Exception {
-        mvc.perform(get("/api/v1/analytics/overview"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
-    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
     void analyticsCalculationsFiltersAndPrivacyMatchDatabaseRecords() throws Exception {
         Instant created = Instant.now().minusSeconds(3600);
         long completed = analyticsPayment("ANALYTICS-COMPLETED", "100.00", "USD", "COMPLETED", null, null, created);
@@ -183,7 +167,6 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
     void analyticsReturnsRealEmptyResultsForAnEmptyPeriod() throws Exception {
         mvc.perform(get("/api/v1/analytics/overview").param("from", "2020-01-01").param("to", "2020-01-07"))
                 .andExpect(status().isOk())
@@ -206,8 +189,7 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
-        void returnsOtherCustomersWithBackendUnmaskedCardsAndPaymentHistory() throws Exception {
+    void returnsOtherCustomersWithBackendUnmaskedCardsAndPaymentHistory() throws Exception {
         mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-CUSTOMER-HISTORY")
                         .contentType(MediaType.APPLICATION_JSON).content(request("42.00")))
                 .andExpect(status().isCreated());

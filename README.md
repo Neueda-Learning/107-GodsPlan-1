@@ -42,23 +42,11 @@ MySQL is available on `localhost:3306`. The default development credentials in `
 
 The application uses an nginx reverse proxy to serve both frontend and backend through a single port. The nginx port can be configured via the `NGINX_PORT` environment variable in `.env` (defaults to 8081). This is useful when deploying to environments with specific port requirements like EC2 instances.
 
-### Staff login
+This is a single-user local system: none of the API endpoints require authentication, and no account details are masked in responses.
 
-Use the following local demonstration account to access **Customers** and **Analytics**:
+The modal uses the public `/api/v1/payment-options/**` endpoints to retrieve active customers, accounts, currencies, and current balances. `/api/v1/customers/**` and `/api/v1/analytics/**` are likewise open, with no login required.
 
-| Field | Value |
-|---|---|
-| Email | `staff@godsplan.local` |
-| Password | `staff-demo-2026` |
-| Role | `ADMIN` |
-
-These credentials are configured through `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_FULL_NAME` in `.env`. They are intended only for local development and should be replaced in any shared or deployed environment.
-
-Authentication uses an HTTP-only server session with CSRF protection. The backend resolves the current user from the authenticated session and independently enforces `ADMIN` or `STAFF` authorization for customer and analytics endpoints.
-
-Creating payments does not require a login. The modal uses the public `/api/v1/payment-options/**` endpoints to retrieve active customers, masked accounts, currencies, and current balances. `/api/v1/customers/**` and `/api/v1/analytics/**` remain protected.
-
-Only card brand and the server-generated form `XXXX XXXX XXXX 1234` are returned to the browser. Full card numbers, CVVs, passwords, and payment tokens are neither exposed by this API nor stored by the customer-card migration.
+CVVs and payment tokens are never returned by the API or stored by the customer-card migration.
 
 ### Seed development analytics data
 
@@ -166,7 +154,7 @@ npm install
 npm run dev
 ```
 
-Backend only requires Java 21, Maven 3.9+, and a running MySQL database. Configuration is externalized through `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PAYMENT_MAX_AMOUNT`, `EXCHANGE_RATE_API_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_FULL_NAME`, `APP_ENVIRONMENT`, `ANALYTICS_TIME_ZONE`, `ANALYTICS_BASE_CURRENCY`, and `ANALYTICS_MAX_QUERY_ROWS`.
+Backend only requires Java 21, Maven 3.9+, and a running MySQL database. Configuration is externalized through `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PAYMENT_MAX_AMOUNT`, `EXCHANGE_RATE_API_KEY`, `APP_ENVIRONMENT`, `ANALYTICS_TIME_ZONE`, `ANALYTICS_BASE_CURRENCY`, and `ANALYTICS_MAX_QUERY_ROWS`.
 
 Run verification:
 

@@ -29,10 +29,9 @@ export default function CustomerCard({ customer }) {
         <div className="min-w-0">
           <div className="flex items-center gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary-light text-lg font-bold text-primary-hover">{customer.fullName.charAt(0)}</span>
             <div className="min-w-0"><h3 className="truncate text-lg font-bold text-ink">{customer.fullName}</h3>
-              <p className="mt-0.5 flex items-center gap-2 font-mono text-sm font-semibold tracking-wide text-ink-muted"><CreditCard className="size-4" />{customer.maskedCardNumber || 'No card on file'}</p></div></div>
+              <p className="mt-0.5 flex items-center gap-2 font-mono text-sm font-semibold tracking-wide text-ink-muted"><CreditCard className="size-4" />{customer.cardNumber || 'No card on file'}</p></div></div>
           <p className="mt-4 flex items-center gap-2 text-sm text-ink-muted"><Mail className="size-4" />{customer.email}</p>
         </div>
-        {customer.cardBrand && <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-ink-muted">{customer.cardBrand}</span>}
       </div>
       <div className="mt-5 border-t border-line pt-5"><div className="mb-3 flex items-center gap-2"><Landmark className="size-4 text-primary-hover" /><h4 className="text-sm font-bold text-ink">Accounts</h4></div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{customer.accounts.map((account) => <div key={account.id} className="rounded-xl border border-line bg-canvas p-3"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-ink">{account.maskedAccountNumber}</p><span className={`size-2 rounded-full ${account.active ? 'bg-success' : 'bg-slate-300'}`} /></div><p className="mt-1 text-xs text-ink-muted">{account.accountType} · {account.currency}</p></div>)}</div>

@@ -38,7 +38,7 @@ public class CustomerService {
     @Transactional(readOnly = true)
     public PageResponse<CustomerResponse> list(Pageable pageable) {
         return PageResponse.from(customers
-                .findByActiveTrueAndRoleOrderByFullNameAsc("CUSTOMER")
+                .findByActiveTrueAndRoleOrderByFullNameAsc("CUSTOMER", pageable)
                 .map(this::toResponse));
     }
 
