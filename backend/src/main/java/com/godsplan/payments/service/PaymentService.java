@@ -75,9 +75,11 @@ public class PaymentService {
             throw new ApiException(ErrorCode.INVALID_ACCOUNT, HttpStatus.BAD_REQUEST,
                     "Source and destination accounts must be different");
         }
-        if (request.amount().signum() > 0 && source.getAvailableBalance().compareTo(request.amount()) < 0) {
-            insufficientAudit.record(idempotencyKey, request, currency, source, destination);
-            throw insufficientFunds();
+        if (request.amount().signum() > 0) {
+            BigDecimal fee = request.amount().multiply(new BigDecimal("0.02")).setScale(2, RoundingMode.HALF_UP);
+            if (source.getAvailableBalance().compareTo(request.amount().add(fee)) < 0) {
+                throw insufficientFunds();
+            }
         }
 
         Payment created;
