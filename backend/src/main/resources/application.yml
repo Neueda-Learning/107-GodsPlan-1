@@ -47,11 +47,6 @@ payments:
     fresh-ttl: 5m
     max-age: 30m
     timeout: 2s
-auth:
-  admin:
-    username: ${ADMIN_USERNAME:}
-    password: ${ADMIN_PASSWORD:}
-    full-name: ${ADMIN_FULL_NAME:Operations Staff}
 analytics:
   environment: ${APP_ENVIRONMENT:production}
   time-zone: ${ANALYTICS_TIME_ZONE:Asia/Kolkata}

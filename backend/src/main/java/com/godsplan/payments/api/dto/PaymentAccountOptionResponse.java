@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 public record PaymentAccountOptionResponse(
         Long id,
         String accountType,
-        String maskedAccountNumber,
+        String accountNumber,
         String currency,
         BigDecimal availableBalance,
         String label) {}

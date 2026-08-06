@@ -6,9 +6,9 @@ public record CustomerResponse(
         Long id,
         String fullName,
         String email,
-        String maskedCardNumber,
+        String cardNumber,
         String cardBrand,
         List<AccountDetails> accounts) {
-    public record AccountDetails(Long id, String accountType, String maskedAccountNumber,
+    public record AccountDetails(Long id, String accountType, String accountNumber,
                                  String currency, boolean active) {}
 }

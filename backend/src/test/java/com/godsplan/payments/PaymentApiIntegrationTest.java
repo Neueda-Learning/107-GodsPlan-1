@@ -177,8 +177,7 @@ class PaymentApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(3))
                 .andExpect(jsonPath("$.content", hasSize(2)))
-                .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
-                .andExpect(jsonPath("$.content[0].lastFour").doesNotExist())
+                .andExpect(jsonPath("$.content[0].cardNumber").value("1234"))
                 .andExpect(jsonPath("$.content[0].cvv").doesNotExist())
                 .andExpect(jsonPath("$.content[0].paymentToken").doesNotExist());
     }
@@ -208,7 +207,7 @@ class PaymentApiIntegrationTest {
 
     @Test
     @WithMockUser(username = "staff@godsplan.local", roles = "ADMIN")
-    void returnsOtherCustomersWithBackendMaskedCardsAndPaymentHistory() throws Exception {
+        void returnsOtherCustomersWithBackendUnmaskedCardsAndPaymentHistory() throws Exception {
         mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-CUSTOMER-HISTORY")
                         .contentType(MediaType.APPLICATION_JSON).content(request("42.00")))
                 .andExpect(status().isCreated());
@@ -217,10 +216,8 @@ class PaymentApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].fullName").value("Test Customer"))
-                .andExpect(jsonPath("$.content[0].maskedCardNumber").value("XXXX XXXX XXXX 1234"))
-                .andExpect(jsonPath("$.content[0].accounts[0].maskedAccountNumber").value("XXXX 0002"))
-                .andExpect(jsonPath("$.content[0].accounts[0].accountNumber").doesNotExist())
-                .andExpect(jsonPath("$.content[0].lastFour").doesNotExist());
+                .andExpect(jsonPath("$.content[0].cardNumber").value("1234"))
+                .andExpect(jsonPath("$.content[0].accounts[0].accountNumber").value("ACC-0002"));
 
         mvc.perform(get("/api/v1/customers/2/transactions"))
                 .andExpect(status().isOk())
@@ -229,7 +226,7 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    void paymentOptionsArePublicDatabaseBackedAndAccountsAreMasked() throws Exception {
+        void paymentOptionsArePublicDatabaseBackedAndAccountsAreUnmasked() throws Exception {
         mvc.perform(get("/api/v1/payment-options/customers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
@@ -239,10 +236,9 @@ class PaymentApiIntegrationTest {
         mvc.perform(get("/api/v1/payment-options/customers/2/accounts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].label").value("Savings Account · XXXX 0002 · USD"))
-                .andExpect(jsonPath("$[0].maskedAccountNumber").value("XXXX 0002"))
-                .andExpect(jsonPath("$[0].availableBalance").value(1000.00))
-                .andExpect(jsonPath("$[0].accountNumber").doesNotExist());
+                .andExpect(jsonPath("$[0].label").value("Savings Account · ACC-0002 · USD"))
+                .andExpect(jsonPath("$[0].accountNumber").value("ACC-0002"))
+                .andExpect(jsonPath("$[0].availableBalance").value(1000.00));
 
         mvc.perform(get("/api/v1/payment-options/customers/2/accounts/2"))
                 .andExpect(status().isOk())
