@@ -1,0 +1,140 @@
+# Meeting Notes 2
+
+## Overview
+
+The client reviewed the current implementation of the international payment processing system, appreciated the overall progress, and provided feedback to make the application more aligned with real-world banking systems. The discussion focused on improving the payment workflow, user experience, security considerations, and UI consistency.
+
+## Discussion Summary
+
+### 1. International Transaction Fee
+
+* Introduce a small transaction fee (approximately **1–2%**) for international payments.
+* Display the fee along with the exchange rate during payment confirmation.
+* This helps distinguish international transfers from domestic transactions.
+
+### 2. Payment Processing Workflow
+
+The client suggested replacing the current instant payment flow with a more realistic banking workflow.
+
+**Proposed Flow:**
+
+1. User initiates payment.
+2. System generates a unique payment reference number.
+3. Payment status changes to **Pending/Validating**.
+4. After a simulated delay (2–3 minutes), the payment is processed.
+5. Final status changes to **Completed** or **Failed**.
+
+This workflow should be demonstrated as a simulation of how NEFT and other banking systems process transactions.
+
+### 3. Payment Status Tracking
+
+* Add separate payment states:
+
+  * Pending
+  * Validating
+  * Completed
+  * Failed
+* Users should be able to monitor the current status of each payment using its reference number.
+
+### 4. Failure Simulation
+
+Implement simulated payment failures to demonstrate system robustness.
+
+Suggested failure scenarios include:
+
+* Exchange rate service unavailable
+* Insufficient balance
+* Validation failures
+* Developer-triggered failure for demonstration purposes
+
+### 5. Insufficient Balance Validation
+
+* Validate sender account balance before processing a transaction.
+* Prevent payments when the available balance is insufficient.
+* Display an appropriate error message without initiating the transaction.
+
+### 6. Audit Log
+
+Instead of including failed transactions in the payment history:
+
+* Maintain a separate **Audit Log** containing:
+
+  * Failed payment attempts
+  * Validation errors
+  * Failure reason
+  * Timestamp
+
+### 7. Customer and Account Relationship
+
+The client pointed out inconsistencies between customer nationality and available accounts.
+
+Suggested approaches:
+
+* Restrict customers to accounts from their own country for simplicity.
+* Alternatively, redesign the UI so country labels represent account ownership more accurately.
+
+### 8. Customer Information UI
+
+* Remove unnecessary country labels beside customer names if they do not add meaningful information.
+* When selecting a customer, clearly display:
+
+  * All linked accounts
+  * Account balance
+  * Transaction history
+
+### 9. Account Display
+
+* Remove Visa/MasterCard logos from account cards since these represent bank accounts, not credit/debit cards.
+
+### 10. Authentication
+
+The client advised not to spend additional development effort on authentication for this phase.
+
+Instead:
+
+* Remove authentication from the current demo if necessary.
+* Mention during the presentation that an **Admin Module** will be implemented in a future phase.
+
+### 11. Future Admin Module
+
+Planned features include:
+
+* Admin authentication
+* Add/Remove customers
+* Add/Remove accounts
+* View unmasked account details
+* Customer management
+
+This functionality does not need to be implemented for the current demonstration.
+
+### 12. Security Considerations
+
+* Sensitive information (such as account numbers) should ideally remain masked.
+* Full details should only be visible through the future Admin Module.
+
+### 13. Exchange Rate API
+
+Current implementation using cached exchange rates with fallback to a third-party API is acceptable.
+
+Enhancement:
+
+* Apply the transaction fee after exchange rate calculation.
+
+## Action Items
+
+* [ ] Add 1–2% international transaction fee.
+* [ ] Implement delayed payment processing with Pending → Validating → Completed workflow.
+* [ ] Generate payment reference IDs.
+* [ ] Add payment status tracking.
+* [ ] Simulate payment failures.
+* [ ] Implement insufficient balance validation.
+* [ ] Create an Audit Log for failed payment attempts.
+* [ ] Improve customer-account relationship and UI consistency.
+* [ ] Remove Visa/MasterCard logos from account views.
+* [ ] Simplify authentication for the demo.
+* [ ] Mention future Admin Module during the presentation.
+* [ ] Keep exchange rate caching and integrate transaction fee calculation.
+
+## Outcome
+
+The client was satisfied with the overall implementation and confirmed that the project is progressing well. The primary focus before the next review should be on making the payment workflow more realistic, improving UI consistency, and demonstrating banking-like transaction processing rather than emphasizing authentication mechanisms.
