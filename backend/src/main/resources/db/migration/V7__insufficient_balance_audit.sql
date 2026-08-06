@@ -1,0 +1,21 @@
+CREATE TABLE insufficient_balance_payments (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  idempotency_key VARCHAR(80) NOT NULL UNIQUE,
+  amount DECIMAL(15,2) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  source_account_id BIGINT NOT NULL,
+  destination_account_id BIGINT NOT NULL,
+  payment_method VARCHAR(80) NOT NULL DEFAULT 'Bank transfer',
+  reference VARCHAR(200),
+  intermediary_bank VARCHAR(120),
+  error_code VARCHAR(40) NOT NULL,
+  error_description VARCHAR(300) NOT NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT fk_insufficient_source FOREIGN KEY (source_account_id) REFERENCES accounts(id),
+  CONSTRAINT fk_insufficient_destination FOREIGN KEY (destination_account_id) REFERENCES accounts(id),
+  CONSTRAINT chk_insufficient_amount_positive CHECK (amount > 0),
+  CONSTRAINT chk_insufficient_error_code CHECK (error_code = 'INSUFFICIENT_FUNDS'),
+  INDEX idx_insufficient_created_at (created_at DESC),
+  INDEX idx_insufficient_source_account (source_account_id),
+  INDEX idx_insufficient_destination_account (destination_account_id)
+);
