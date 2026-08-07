@@ -47,6 +47,8 @@ payments:
     fresh-ttl: 5m
     max-age: 30m
     timeout: 2s
+  processing:
+    stage-delay: ${PAYMENT_STAGE_DELAY:10s}
 analytics:
   environment: ${APP_ENVIRONMENT:production}
   time-zone: ${ANALYTICS_TIME_ZONE:Asia/Kolkata}

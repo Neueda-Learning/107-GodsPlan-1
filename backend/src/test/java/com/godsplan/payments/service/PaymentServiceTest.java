@@ -41,10 +41,9 @@ class PaymentServiceTest {
     @Mock private PaymentRepository payments;
     @Mock private AccountRepository accounts;
     @Mock private ValidationService validation;
-    @Mock private ExchangeRateService exchangeRates;
     @Mock private InitialPaymentWriter initialWriter;
     @Mock private LifecycleService lifecycle;
-    @Mock private SettlementService settlement;
+    @Mock private PaymentProcessingWorker processor;
     @Mock private InsufficientBalanceAuditService insufficientAudit;
     @Mock private InsufficientBalancePaymentRepository insufficientAudits;
 
@@ -268,7 +267,7 @@ class PaymentServiceTest {
     // ── create: happy path ────────────────────────────────────────────────────
 
     @Test
-    void create_validNewPaymentSameCurrency_processesAndReturns201() {
+    void create_validNewPaymentSameCurrency_returnsCreatedImmediatelyAndTriggersAsyncProcessing() {
         // Arrange
         String key = "IK-NEW";
         CreatePaymentRequest request = validRequest();
@@ -282,23 +281,21 @@ class PaymentServiceTest {
         createdPayment.setFee(new BigDecimal("2.00"));
         createdPayment.setStatus(PaymentStatus.CREATED);
 
-        Payment processedPayment = buildCompletedPayment();
-
         when(insufficientAudits.findByIdempotencyKey(key)).thenReturn(Optional.empty());
         when(payments.findByIdempotencyKey(key)).thenReturn(Optional.empty());
         when(validation.normalizeAndValidateCurrency("USD")).thenReturn("USD");
         when(initialWriter.create(eq(key), eq(request), eq("USD"), eq(sourceAccount), eq(destAccount)))
                 .thenReturn(createdPayment);
-        when(lifecycle.validateWithRate(eq(1L), isNull(), isNull())).thenReturn(createdPayment);
-        when(payments.findById(1L)).thenReturn(Optional.of(processedPayment));
 
         // Act
         PaymentService.CreateResult result = service.create(key, request);
 
-        // Assert
+        // Assert — the response reflects the CREATED payment immediately; remaining
+        // lifecycle stages are handed off to the async worker rather than run inline.
         assertThat(result.created()).isTrue();
-        assertThat(result.payment().status()).isEqualTo(PaymentStatus.COMPLETED);
-        verify(settlement).settle(1L);
+        assertThat(result.payment().status()).isEqualTo(PaymentStatus.CREATED);
+        verify(processor).processAsync(1L);
+        verifyNoInteractions(lifecycle);
     }
 
     // ── get ───────────────────────────────────────────────────────────────────

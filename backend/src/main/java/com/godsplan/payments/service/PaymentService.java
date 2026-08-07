@@ -8,14 +8,12 @@ import com.godsplan.payments.domain.Account;
 import com.godsplan.payments.domain.Payment;
 import com.godsplan.payments.domain.PaymentStatus;
 import com.godsplan.payments.error.ApiException;
-import com.godsplan.payments.error.BusinessFailure;
 import com.godsplan.payments.error.ErrorCode;
 import com.godsplan.payments.repository.AccountRepository;
 import com.godsplan.payments.repository.InsufficientBalancePaymentRepository;
 import com.godsplan.payments.repository.PaymentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Currency;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,25 +30,23 @@ public class PaymentService {
     private final PaymentRepository payments;
     private final AccountRepository accounts;
     private final ValidationService validation;
-    private final ExchangeRateService exchangeRates;
     private final InitialPaymentWriter initialWriter;
     private final LifecycleService lifecycle;
-    private final SettlementService settlement;
+    private final PaymentProcessingWorker processor;
     private final InsufficientBalanceAuditService insufficientAudit;
     private final InsufficientBalancePaymentRepository insufficientAudits;
 
     public PaymentService(PaymentRepository payments, AccountRepository accounts, ValidationService validation,
-                          ExchangeRateService exchangeRates, InitialPaymentWriter initialWriter,
-                          LifecycleService lifecycle, SettlementService settlement,
+                          InitialPaymentWriter initialWriter, LifecycleService lifecycle,
+                          PaymentProcessingWorker processor,
                           InsufficientBalanceAuditService insufficientAudit,
                           InsufficientBalancePaymentRepository insufficientAudits) {
         this.payments = payments;
         this.accounts = accounts;
         this.validation = validation;
-        this.exchangeRates = exchangeRates;
         this.initialWriter = initialWriter;
         this.lifecycle = lifecycle;
-        this.settlement = settlement;
+        this.processor = processor;
         this.insufficientAudit = insufficientAudit;
         this.insufficientAudits = insufficientAudits;
     }
@@ -91,36 +87,8 @@ public class PaymentService {
             return resultOrInsufficient(winner, false);
         }
         log.info("Created payment {} with idempotency key {}", created.getId(), idempotencyKey);
-        process(created);
-        Payment processed = payments.findById(created.getId()).orElseThrow(() -> notFound(created.getId()));
-        return resultOrInsufficient(processed, true);
-    }
-
-    private void process(Payment payment) {
-        try {
-            validation.validateBusiness(payment);
-            String destinationCurrency = payment.getDestinationAccount().getCurrency();
-            if (!destinationCurrency.equals(payment.getCurrency())) {
-                RateQuote quote = exchangeRates.getRate(payment.getCurrency(), destinationCurrency, payment.getAmount());
-                int minorUnits = Math.max(Currency.getInstance(destinationCurrency).getDefaultFractionDigits(), 0);
-                BigDecimal converted = payment.getAmount().multiply(quote.rate()).setScale(minorUnits, RoundingMode.HALF_EVEN);
-                validation.validateConvertedAmount(converted);
-                lifecycle.validateWithRate(payment.getId(), converted, quote);
-            } else {
-                lifecycle.validateWithRate(payment.getId(), null, null);
-            }
-            settlement.settle(payment.getId());
-        } catch (BusinessFailure failure) {
-            log.info("Payment {} failed validation: {}", payment.getId(), failure.getCode());
-            lifecycle.transition(payment.getId(), PaymentStatus.FAILED,
-                    failure.getCode().name(), failure.getMessage());
-        } catch (ApiException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("Payment {} processing failed", payment.getId(), exception);
-            lifecycle.transition(payment.getId(), PaymentStatus.FAILED,
-                    ErrorCode.PROCESSING_ERROR.name(), "Payment processing could not be completed");
-        }
+        processor.processAsync(created.getId());
+        return resultOrInsufficient(created, true);
     }
 
     @Transactional(readOnly = true)

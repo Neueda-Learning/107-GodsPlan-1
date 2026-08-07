@@ -35,7 +35,3 @@ export const analyticsApi = {
   recent: (params = {}) => client.get('/analytics/recent-transactions', { params }).then(({ data }) => data),
   exchangeRates: (params = {}) => client.get('/analytics/exchange-rates', { params }).then(({ data }) => data),
 }
-
-export const exchangeRateApi = {
-  quote: (params) => client.get('/exchange-rates/quote', { params }).then(({ data }) => data),
-}

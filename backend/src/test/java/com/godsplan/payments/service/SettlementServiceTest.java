@@ -35,7 +35,20 @@ class SettlementServiceTest {
     @InjectMocks private SettlementService service;
 
     @Test
-    void settle_sufficientBalanceSameCurrency_completesSuccessfully() {
+    void markSent_transitionsPaymentToSent() {
+        // Arrange
+        when(lifecycle.transition(1L, PaymentStatus.SENT, null, null)).thenReturn(new Payment());
+
+        // Act
+        service.markSent(1L);
+
+        // Assert
+        verify(lifecycle).transition(1L, PaymentStatus.SENT, null, null);
+        verifyNoInteractions(payments, accounts);
+    }
+
+    @Test
+    void completeSettlement_sufficientBalanceSameCurrency_completesSuccessfully() {
         // Arrange
         Account source = mockAccount(1L, new BigDecimal("1000.00"), true);
         Account destination = mockAccount(2L, new BigDecimal("500.00"), true);
@@ -45,12 +58,12 @@ class SettlementServiceTest {
         when(lifecycle.transition(anyLong(), any(), any(), any())).thenReturn(payment);
 
         // Act
-        assertThatNoException().isThrownBy(() -> service.settle(1L));
+        assertThatNoException().isThrownBy(() -> service.completeSettlement(1L));
 
         // Assert
         verify(accounts).saveAll(anyList());
-        verify(lifecycle).transition(1L, PaymentStatus.SENT, null, null);
         verify(lifecycle).transition(1L, PaymentStatus.COMPLETED, null, null);
+        verify(lifecycle, never()).transition(1L, PaymentStatus.SENT, null, null);
     }
 
     @Test
@@ -64,7 +77,7 @@ class SettlementServiceTest {
         when(lifecycle.transition(anyLong(), any(), any(), any())).thenReturn(payment);
 
         // Act
-        service.settle(1L);
+        service.completeSettlement(1L);
 
         // Assert — debit = amount + fee = 102, credit = amount (no destination amount) = 100
         verify(source).debit(new BigDecimal("102.00"));
@@ -82,7 +95,7 @@ class SettlementServiceTest {
         when(lifecycle.transition(anyLong(), any(), any(), any())).thenReturn(payment);
 
         // Act
-        service.settle(1L);
+        service.completeSettlement(1L);
 
         // Assert — credit = destinationAmount = 90
         verify(destination).credit(new BigDecimal("90.00"));
@@ -95,7 +108,7 @@ class SettlementServiceTest {
         when(payments.findByIdForUpdate(99L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThatThrownBy(() -> service.settle(99L))
+        assertThatThrownBy(() -> service.completeSettlement(99L))
                 .isInstanceOf(BusinessFailure.class)
                 .satisfies(e -> assertThat(((BusinessFailure) e).getCode())
                         .isEqualTo(ErrorCode.PAYMENT_NOT_FOUND));
@@ -111,7 +124,7 @@ class SettlementServiceTest {
         when(payments.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
 
         // Act & Assert
-        assertThatThrownBy(() -> service.settle(1L))
+        assertThatThrownBy(() -> service.completeSettlement(1L))
                 .isInstanceOf(BusinessFailure.class)
                 .satisfies(e -> assertThat(((BusinessFailure) e).getCode())
                         .isEqualTo(ErrorCode.INSUFFICIENT_FUNDS));
@@ -130,7 +143,7 @@ class SettlementServiceTest {
         when(payments.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
 
         // Act & Assert
-        assertThatThrownBy(() -> service.settle(1L))
+        assertThatThrownBy(() -> service.completeSettlement(1L))
                 .isInstanceOf(BusinessFailure.class)
                 .satisfies(e -> assertThat(((BusinessFailure) e).getCode())
                         .isEqualTo(ErrorCode.INVALID_ACCOUNT));
@@ -146,7 +159,7 @@ class SettlementServiceTest {
         when(payments.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
 
         // Act & Assert
-        assertThatThrownBy(() -> service.settle(1L))
+        assertThatThrownBy(() -> service.completeSettlement(1L))
                 .isInstanceOf(BusinessFailure.class)
                 .satisfies(e -> assertThat(((BusinessFailure) e).getCode())
                         .isEqualTo(ErrorCode.INVALID_ACCOUNT));
@@ -163,7 +176,7 @@ class SettlementServiceTest {
         when(lifecycle.transition(anyLong(), any(), any(), any())).thenReturn(payment);
 
         // Act & Assert
-        assertThatNoException().isThrownBy(() -> service.settle(1L));
+        assertThatNoException().isThrownBy(() -> service.completeSettlement(1L));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

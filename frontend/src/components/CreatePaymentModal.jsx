@@ -1,6 +1,6 @@
 import { Loader2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { apiMessage, customerApi, exchangeRateApi, paymentApi } from '../api/client'
+import { apiMessage, customerApi, paymentApi } from '../api/client'
 import { useToast } from '../hooks/useToast'
 import { maskIdentifier } from '../utils/format'
 import { generateId } from '../utils/generateId'
@@ -34,9 +34,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
   const [customersLoading, setCustomersLoading] = useState(true)
   const [sourceLoading, setSourceLoading] = useState(false)
   const [destinationLoading, setDestinationLoading] = useState(false)
-  const [conversionQuote, setConversionQuote] = useState(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
-  const [quoteError, setQuoteError] = useState('')
   const [insufficientPopup, setInsufficientPopup] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -97,7 +94,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     [customers, form.senderCustomerId],
   )
   const sourceAccount = sourceAccounts.find((account) => String(account.id) === form.sourceAccountId)
-  const destinationAccount = destinationAccounts.find((account) => String(account.id) === form.destinationAccountId)
   const amountIsValid = /^\d+(\.\d{1,2})?$/.test(form.amount) && Number(form.amount) > 0
   const feeAmount = amountIsValid ? Math.round(Number(form.amount) * 0.02 * 100) / 100 : 0
   const totalDeducted = amountIsValid ? Number(form.amount) + feeAmount : 0
@@ -107,27 +103,8 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     ? `Insufficient funds. Your available balance is ${money(sourceAccount.availableBalance, sourceAccount.currency)} but this transfer requires ${money(totalDeducted.toFixed(2), sourceAccount.currency)} (amount + 2% fee).`
     : ''
 
-  useEffect(() => {
-    if (!sourceAccount?.currency || !destinationAccount?.currency || !amountIsValid) return undefined
-    let active = true
-    const timer = setTimeout(() => {
-      setQuoteLoading(true)
-      exchangeRateApi.quote({
-        sourceCurrency: sourceAccount.currency,
-        destinationCurrency: destinationAccount.currency,
-        amount: form.amount,
-      }).then((quote) => active && setConversionQuote(quote))
-        .catch((error) => active && setQuoteError(apiMessage(error)))
-        .finally(() => active && setQuoteLoading(false))
-    }, 300)
-    return () => { active = false; clearTimeout(timer) }
-  }, [sourceAccount?.currency, destinationAccount?.currency, form.amount, amountIsValid])
-
   const change = (field) => (event) => {
     const value = event.target.value
-    if (['senderCustomerId', 'receiverCustomerId', 'sourceAccountId', 'destinationAccountId', 'amount'].includes(field)) {
-      setConversionQuote(null); setQuoteError(''); setQuoteLoading(false)
-    }
     if (field === 'senderCustomerId') {
       setSourceAccounts([])
       setSourceLoading(Boolean(value))
@@ -186,8 +163,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     return next
   }
 
-  const quoteReady = Boolean(conversionQuote) && !quoteError && !quoteLoading
-  const valid = Object.keys(validationErrors()).length === 0 && quoteReady
+  const valid = Object.keys(validationErrors()).length === 0
 
   const submit = async (event) => {
     event.preventDefault()
@@ -199,12 +175,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
     setSubmitting(true)
     setErrors((current) => ({ ...current, form: '' }))
     try {
-      const latestQuote = await exchangeRateApi.quote({
-        sourceCurrency: sourceAccount.currency,
-        destinationCurrency: destinationAccount.currency,
-        amount: form.amount,
-      })
-      setConversionQuote(latestQuote)
       const latestAccount = await customerApi.account(form.senderCustomerId, form.sourceAccountId)
       const latestFee = Math.round(Number(form.amount) * 0.02 * 100) / 100
       const latestTotal = Number(form.amount) + latestFee
@@ -282,7 +252,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                 label: 'Sender',
                 loading: customersLoading,
                 disabled: customers.length === 0,
-                options: customers.map((customer) => ({ ...customer, label: customer.label || [customer.fullName, customer.country].filter(Boolean).join(' · ') })),
+                options: customers.map((customer) => ({ ...customer, label: customer.fullName || customer.label })),
                 placeholder: 'Select sender',
                 emptyMessage: 'No customers available',
               })}
@@ -291,7 +261,7 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                 label: 'Receiver',
                 loading: customersLoading,
                 disabled: !form.senderCustomerId || receiverCustomers.length === 0,
-                options: receiverCustomers.map((customer) => ({ ...customer, label: customer.label || [customer.fullName, customer.country].filter(Boolean).join(' · ') })),
+                options: receiverCustomers.map((customer) => ({ ...customer, label: customer.fullName || customer.label })),
                 placeholder: 'Select receiver',
                 emptyMessage: form.senderCustomerId ? 'No other customers available' : 'Select a sender first',
               })}
@@ -317,9 +287,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                   </span>
                 )}
                 {(insufficientMessage || errors.amount) && <span className="mt-1.5 block text-sm font-semibold text-red-600" role="alert">{insufficientMessage || errors.amount}</span>}
-                {quoteLoading && <span className="mt-2 flex items-center gap-2 text-xs text-ink-muted"><Loader2 className="size-3.5 animate-spin text-primary" />Retrieving current exchange rate…</span>}
-                {quoteError && <span className="mt-2 block text-xs font-medium text-red-600" role="alert">{quoteError}</span>}
-                {conversionQuote && !quoteLoading && <span className="mt-3 block rounded-xl border border-line bg-canvas p-3 text-xs leading-5"><span className="block text-ink-muted">Exchange rate: <strong className="text-ink">1 {conversionQuote.sourceCurrency} = {conversionQuote.exchangeRate} {conversionQuote.destinationCurrency}</strong></span><span className="block text-ink-muted">Receiver gets: <strong className="text-primary">{money(conversionQuote.destinationAmount, conversionQuote.destinationCurrency)}</strong></span></span>}
               </label>
               <label className="block">
                 <span className="label">Intermediary bank <span className="font-normal text-ink-muted">(optional)</span></span>
@@ -338,7 +305,6 @@ export default function CreatePaymentModal({ onClose, onCreated }) {
                 placeholder: 'Select sender account',
                 emptyMessage: form.senderCustomerId ? 'This customer has no active accounts' : 'Select a sender first',
               })}
-              {sourceAccount && <div className="-mt-3 rounded-xl border border-line bg-canvas px-3 py-2.5 text-xs"><span className="flex items-center justify-between gap-3 text-ink-muted">Available Balance: <strong className="tabular-nums text-ink">{money(sourceAccount.availableBalance, sourceAccount.currency)}</strong></span></div>}
               {errors.sourceAccounts && <p className="-mt-3 text-xs text-red-600">{errors.sourceAccounts}</p>}
               {selectField({
                 name: 'destinationAccountId',

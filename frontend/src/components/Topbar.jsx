@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, CircleHelp, Menu, Moon, Plus, Search, Sun, UserRound } from 'lucide-react'
+import { ChevronDown, Menu, Moon, Search, Sun, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -44,8 +44,6 @@ export default function Topbar({ onMenu, onCreate, theme, onTheme, currentUser }
         <label className="relative block"><span className="sr-only">Search payments</span><Search className="pointer-events-none absolute left-3.5 top-3 size-[18px] text-ink-muted" /><input className="input h-11 border-transparent bg-canvas pl-11 pr-16 shadow-inner" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search payments, references, transactions…" /><span className="pointer-events-none absolute right-3 top-2.5 rounded-md border border-line bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">Enter</span></label>
       </form>
       <div ref={menus} className="ml-auto flex items-center gap-2">
-        <button className="icon-button hidden lg:grid" aria-label="Help" title="Help"><CircleHelp className="size-[18px]" /></button>
-        <button className="icon-button hidden sm:grid" aria-label="Notifications" title="Notifications"><Bell className="size-[18px]" /></button>
         <div className="relative">
           <button className="icon-button" onClick={() => { setThemeOpen((value) => !value); setUserOpen(false) }} aria-label="Change theme" aria-expanded={themeOpen}>{theme === 'dark' ? <Moon className="size-[18px]" /> : <Sun className="size-[18px]" />}</button>
           {themeOpen && <div className="absolute right-0 top-12 w-44 animate-enter rounded-2xl border border-line bg-elevated p-1.5 shadow-soft" role="menu">
@@ -53,7 +51,6 @@ export default function Topbar({ onMenu, onCreate, theme, onTheme, currentUser }
             <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${theme === 'dark' ? 'bg-primary-light font-semibold text-primary' : 'text-ink-muted hover:bg-canvas hover:text-ink'}`} onClick={() => { onTheme('dark'); setThemeOpen(false) }}><Moon className="size-4" />Dark Mode</button>
           </div>}
         </div>
-        <button className="btn-primary hidden h-10 px-3.5 lg:inline-flex" onClick={onCreate}><Plus className="size-4" />Send payment</button>
         <div className="relative">
           <button className="flex items-center gap-2 rounded-xl p-1.5 transition hover:bg-primary-light" onClick={() => { setUserOpen((value) => !value); setThemeOpen(false) }} aria-label="Open user menu" aria-expanded={userOpen}><span className="grid size-8 place-items-center rounded-[10px] bg-gradient-to-br from-primary to-indigo-400 text-[10px] font-bold text-white">{initials(currentUser?.fullName)}</span><ChevronDown className="hidden size-3.5 text-ink-muted xl:block" /></button>
           {userOpen && <div className="absolute right-0 top-12 w-64 animate-enter rounded-2xl border border-line bg-elevated p-2 shadow-soft"><div className="rounded-xl bg-canvas p-3"><p className="text-sm font-semibold text-ink">{currentUser?.fullName || 'Payment workspace'}</p><p className="mt-0.5 text-xs text-ink-muted">{currentUser?.email || 'Public payment access'}</p></div><div className="mt-1 flex items-center gap-2 px-3 py-2 text-xs text-ink-muted"><UserRound className="size-4" />{currentUser?.role ? `${currentUser.role} session` : 'No staff session active'}</div></div>}

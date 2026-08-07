@@ -27,7 +27,8 @@ class ValidationServiceTest {
                 Set.of("USD", "EUR", "GBP", "INR", "JPY"),
                 new PaymentProperties.ExchangeRate(
                         "https://api.example.com", "test-key",
-                        Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2)));
+                        Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2)),
+                new PaymentProperties.Processing(Duration.ofMillis(1)));
         service = new ValidationService(properties);
     }
 

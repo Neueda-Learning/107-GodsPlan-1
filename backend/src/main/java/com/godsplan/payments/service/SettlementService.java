@@ -34,7 +34,12 @@ public class SettlementService {
     }
 
     @Transactional
-    public void settle(Long paymentId) {
+    public void markSent(Long paymentId) {
+        lifecycle.transition(paymentId, PaymentStatus.SENT, null, null);
+    }
+
+    @Transactional
+    public void completeSettlement(Long paymentId) {
         Payment payment = payments.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new BusinessFailure(ErrorCode.PAYMENT_NOT_FOUND, "Payment was not found"));
         Account source = payment.getSourceAccount();
@@ -54,7 +59,6 @@ public class SettlementService {
         source.debit(payment.getAmount().add(payment.getFee()));
         destination.credit(destinationCredit);
         accounts.saveAll(List.of(source, destination));
-        lifecycle.transition(paymentId, PaymentStatus.SENT, null, null);
         lifecycle.transition(paymentId, PaymentStatus.COMPLETED, null, null);
     }
 }

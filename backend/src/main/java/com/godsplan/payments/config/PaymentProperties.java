@@ -9,7 +9,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record PaymentProperties(
         BigDecimal maxAmount,
         Set<String> supportedCurrencies,
-        ExchangeRate exchangeRate) {
+        ExchangeRate exchangeRate,
+        Processing processing) {
     public record ExchangeRate(String url, String apiKey, Duration freshTtl, Duration maxAge, Duration timeout) {}
+
+    public record Processing(Duration stageDelay) {}
 }
 
