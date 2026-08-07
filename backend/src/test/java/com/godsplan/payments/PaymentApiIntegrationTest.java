@@ -3,6 +3,7 @@ package com.godsplan.payments;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.godsplan.payments.config.AnalyticsProperties;
 import com.godsplan.payments.service.AnalyticsSeedService;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -65,15 +67,19 @@ class PaymentApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request("125.50")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.status").value("CREATED"))
                 .andExpect(jsonPath("$.amount").value(125.50))
                 .andReturn().getResponse().getContentAsString();
         String id = response.replaceAll(".*\\\"id\\\":(\\d+).*", "$1");
+
+        assertEquals("COMPLETED", waitForTerminalStatus(Long.parseLong(id)));
 
         mvc.perform(get("/api/v1/payments/{id}/history", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.history", hasSize(4)))
                 .andExpect(jsonPath("$.history[0].toStatus").value("CREATED"))
+                .andExpect(jsonPath("$.history[1].toStatus").value("VALIDATED"))
+                .andExpect(jsonPath("$.history[2].toStatus").value("SENT"))
                 .andExpect(jsonPath("$.history[3].toStatus").value("COMPLETED"));
         assertEquals(0, new java.math.BigDecimal("871.99").compareTo(
                 jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
@@ -83,20 +89,29 @@ class PaymentApiIntegrationTest {
 
     @Test
     void repeatedIdempotencyKeyReturnsExistingPayment() throws Exception {
-        mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-RETRY")
+        String response = mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-RETRY")
                         .contentType(MediaType.APPLICATION_JSON).content(request("10.00")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
         mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-RETRY")
                         .contentType(MediaType.APPLICATION_JSON).content(request("999.00")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.amount").value(10.00));
+        long id = Long.parseLong(response.replaceAll(".*\\\"id\\\":(\\d+).*", "$1"));
+        waitForTerminalStatus(id);
     }
 
     @Test
     void businessValidationFailureIsAnAuditableResource() throws Exception {
-        mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-INVALID")
+        String response = mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-INVALID")
                         .contentType(MediaType.APPLICATION_JSON).content(request("-1.00")))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("CREATED"))
+                .andReturn().getResponse().getContentAsString();
+        long id = Long.parseLong(response.replaceAll(".*\\\"id\\\":(\\d+).*", "$1"));
+
+        assertEquals("FAILED", waitForTerminalStatus(id));
+        mvc.perform(get("/api/v1/payments/{id}", id))
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_AMOUNT"));
     }
@@ -120,6 +135,7 @@ class PaymentApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(request("5.00")))
                 .andReturn().getResponse().getContentAsString();
         String id = response.replaceAll(".*\\\"id\\\":(\\d+).*", "$1");
+        assertEquals("COMPLETED", waitForTerminalStatus(Long.parseLong(id)));
         mvc.perform(patch("/api/v1/payments/{id}/status", id).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"toStatus\":\"CREATED\"}"))
                 .andExpect(status().isBadRequest())
@@ -192,9 +208,12 @@ class PaymentApiIntegrationTest {
 
     @Test
     void returnsOtherCustomersWithBackendUnmaskedCardsAndPaymentHistory() throws Exception {
-        mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-CUSTOMER-HISTORY")
+        String response = mvc.perform(post("/api/v1/payments").header("Idempotency-Key", "IK-CUSTOMER-HISTORY")
                         .contentType(MediaType.APPLICATION_JSON).content(request("42.00")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long id = Long.parseLong(response.replaceAll(".*\\\"id\\\":(\\d+).*", "$1"));
+        assertEquals("COMPLETED", waitForTerminalStatus(id));
 
         mvc.perform(get("/api/v1/customers"))
                 .andExpect(status().isOk())
@@ -294,10 +313,13 @@ class PaymentApiIntegrationTest {
             var second = executor.submit(() -> concurrentPayment("IK-CONCURRENT-2", ready, start));
             ready.await(5, TimeUnit.SECONDS);
             start.countDown();
-            List<Integer> statuses = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+            long firstId = first.get(10, TimeUnit.SECONDS);
+            long secondId = second.get(10, TimeUnit.SECONDS);
 
-            assertEquals(1, statuses.stream().filter(status -> status == 201).count());
-            assertEquals(1, statuses.stream().filter(status -> status == 409).count());
+            List<String> statuses = List.of(waitForTerminalStatus(firstId), waitForTerminalStatus(secondId));
+
+            assertEquals(1, statuses.stream().filter(status -> status.equals("COMPLETED")).count());
+            assertEquals(1, statuses.stream().filter(status -> status.equals("FAILED")).count());
             assertEquals(0, new java.math.BigDecimal("286.00").compareTo(
                     jdbc.queryForObject("SELECT available_balance FROM accounts WHERE id = 2", java.math.BigDecimal.class)));
             assertEquals(0, new java.math.BigDecimal("1200.00").compareTo(
@@ -323,12 +345,21 @@ class PaymentApiIntegrationTest {
                 + "\"intermediaryBank\":\"Correspondent Bank\",\"reference\":\"Test payment\"}";
     }
 
-    private int concurrentPayment(String key, CountDownLatch ready, CountDownLatch start) throws Exception {
+    private long concurrentPayment(String key, CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
         start.await(5, TimeUnit.SECONDS);
-        return mvc.perform(post("/api/v1/payments").header("Idempotency-Key", key)
+        String response = mvc.perform(post("/api/v1/payments").header("Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON).content(request("700.00")))
-                .andReturn().getResponse().getStatus();
+                .andReturn().getResponse().getContentAsString();
+        return Long.parseLong(response.replaceAll(".*\\\"id\\\":(\\d+).*", "$1"));
+    }
+
+    private String waitForTerminalStatus(long paymentId) {
+        await().atMost(Duration.ofSeconds(5)).pollInterval(Duration.ofMillis(20)).until(() -> {
+            String status = jdbc.queryForObject("SELECT status FROM payments WHERE id = ?", String.class, paymentId);
+            return "COMPLETED".equals(status) || "FAILED".equals(status);
+        });
+        return jdbc.queryForObject("SELECT status FROM payments WHERE id = ?", String.class, paymentId);
     }
 
     private long analyticsPayment(String key, String amount, String currency, String status,

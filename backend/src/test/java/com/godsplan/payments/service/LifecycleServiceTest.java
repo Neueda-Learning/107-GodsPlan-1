@@ -48,6 +48,22 @@ class LifecycleServiceTest {
     }
 
     @Test
+    void transition_createdToSent_skippingValidated_throwsApiException() {
+        // Arrange
+        Payment payment = buildPaymentWithStatus(1L, PaymentStatus.CREATED);
+        when(payments.findByIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.transition(1L, PaymentStatus.SENT, null, null))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).getCode())
+                        .isEqualTo(ErrorCode.INVALID_STATUS_TRANSITION));
+
+        verify(payments, never()).save(any());
+        verifyNoInteractions(history);
+    }
+
+    @Test
     void transition_validatedToSent_transitionsSuccessfully() {
         // Arrange
         Payment payment = buildPaymentWithStatus(1L, PaymentStatus.VALIDATED);

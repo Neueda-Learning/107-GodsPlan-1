@@ -41,14 +41,16 @@ class ExchangeRateServiceTest {
                 Set.of("USD", "EUR"),
                 new PaymentProperties.ExchangeRate(
                         "https://api.exchangerate.host/convert", "test-api-key",
-                        Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2)));
+                        Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2)),
+                new PaymentProperties.Processing(Duration.ofMillis(1)));
 
         propertiesNoKey = new PaymentProperties(
                 new BigDecimal("1000000.00"),
                 Set.of("USD", "EUR"),
                 new PaymentProperties.ExchangeRate(
                         "https://api.exchangerate.host/convert", "",
-                        Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2)));
+                        Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2)),
+                new PaymentProperties.Processing(Duration.ofMillis(1)));
 
         service = new ExchangeRateService(propertiesWithKey, new ObjectMapper(), snapshots);
         mockHttpClient = mock(HttpClient.class);

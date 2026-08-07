@@ -21,6 +21,8 @@ payments:
     fresh-ttl: 5m
     max-age: 30m
     timeout: 2s
+  processing:
+    stage-delay: 1ms
 auth:
   admin:
     username: staff@godsplan.local

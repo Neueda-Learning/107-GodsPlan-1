@@ -25,7 +25,7 @@ public class PaymentController {
     }
 
     @PostMapping
-    @Operation(summary = "Create and synchronously process a payment")
+    @Operation(summary = "Create a payment; remaining lifecycle stages are processed asynchronously")
     public ResponseEntity<PaymentResponse> create(
             @Parameter(required = true, example = "IK-001") @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreatePaymentRequest request) {

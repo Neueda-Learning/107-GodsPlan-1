@@ -1,12 +1,11 @@
-import { ArrowLeftRight, BarChart3, Building2, ChevronLeft, ChevronRight, CreditCard, LayoutDashboard, Landmark, UserRoundCheck, X } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Building2, ChevronLeft, ChevronRight, CreditCard, LayoutDashboard, UserRoundCheck, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/payments', label: 'Payments', icon: CreditCard },
-  { to: '/customers', label: 'Beneficiaries', icon: UserRoundCheck },
-  { to: '/accounts', label: 'Accounts', icon: Landmark },
-  { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { to: '/customers', label: 'Customers', icon: UserRoundCheck },
+  // { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
